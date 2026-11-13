@@ -22,7 +22,7 @@ jobs:
       - name: Flutter o'rnatish
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.47.9'
           channel: 'stable'
 
       - name: Android papkani yaratish va asl ANYtoANY kodlarini tiklash
@@ -37,8 +37,13 @@ jobs:
           cp /tmp/user_pubspec.yaml pubspec.yaml
           mkdir -p lib
           cp /tmp/user_main.dart lib/main.dart
-          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/g' android/app/build.gradle || true
-          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/g' android/app/build.gradle || true
+          # minSdk 24 (ffmpeg_kit talabi): eski Groovy va yangi Kotlin DSL andozalari uchun
+          for f in android/app/build.gradle android/app/build.gradle.kts; do
+            if [ -f "$f" ]; then
+              sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/g; s/minSdk = flutter.minSdkVersion/minSdk = 24/g' "$f"
+            fi
+          done
+          sed -i 's/android:label="any_to_any"/android:label="ANYtoANY"/' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET"/>\n<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>' android/app/src/main/AndroidManifest.xml
 
       - name: Kutubxonalarni o'rnatish

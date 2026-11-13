@@ -9,6 +9,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart' as pdf;
+import 'package:pdf/widgets.dart' as pw;
 import 'package:pdfx/pdfx.dart' as pdfx;
 
 // ================= SOZLAMALAR (SHU YERNI TO'LDIRING) =================
@@ -26,7 +28,7 @@ void main() async {
   try {
     await Supabase.initialize(
       url: SUPABASE_URL,
-      anonKey: SUPABASE_KEY,
+      publishableKey: SUPABASE_KEY,
     );
   } catch (_) {}
 
@@ -70,6 +72,13 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _codeSent = false;
   bool _loading = false;
 
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _otpController.dispose();
+    super.dispose();
+  }
+
   Future<void> _sendOtp() async {
     final email = _emailController.text.trim();
     if (email.isEmpty || !email.contains('@')) {
@@ -82,8 +91,8 @@ class _AuthScreenState extends State<AuthScreen> {
     setState(() => _loading = true);
     try {
       await Supabase.instance.client.auth.signInWithOtp(email: email);
-      setState(() => _codeSent = true);
       if (mounted) {
+        setState(() => _codeSent = true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Pochtangizga tasdiqlash kodi yuborildi!")),
         );
@@ -95,7 +104,7 @@ class _AuthScreenState extends State<AuthScreen> {
         );
       }
     }
-    setState(() => _loading = false);
+    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _verifyOtp() async {
@@ -123,6 +132,12 @@ class _AuthScreenState extends State<AuthScreen> {
             MaterialPageRoute(builder: (_) => const HomeScreen()),
           );
         }
+        return;
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Kirish amalga oshmadi, qayta urinib ko'ring!")),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -131,7 +146,7 @@ class _AuthScreenState extends State<AuthScreen> {
         );
       }
     }
-    setState(() => _loading = false);
+    if (mounted) setState(() => _loading = false);
   }
 
   @override
@@ -220,20 +235,50 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _videoCodec = "libx264";
   bool _isConverting = false;
   int _completedCount = 0;
+  int _failedCount = 0;
+  int _timerTicks = 0;
+
+  static const String _publicDownloadDir = '/storage/emulated/0/Download';
+
+  static const List<String> _audioFormats = ["mp3", "wav", "aac", "m4a", "flac", "ogg"];
+  static const List<String> _videoFormats = ["mp4", "mkv", "avi", "mov", "webm"];
+  static const List<String> _imageFormats = ["png", "jpg"];
+  // PDF ga aylantirish mumkin bo'lgan rasm turlari
+  static const List<String> _imageInputs = ["png", "jpg", "jpeg", "webp", "bmp", "gif", "tif", "tiff"];
 
   final List<String> _formats = [
-    "mp3", "wav", "aac", "m4a", "flac", "ogg",
-    "mp4", "mkv", "avi", "mov", "webm", "gif",
-    "pdf", "png", "jpg"
+    ..._audioFormats,
+    ..._videoFormats, "gif",
+    "pdf", ..._imageFormats,
   ];
 
-  final List> _codecs = [
+  final List<Map<String, String>> _codecs = [
     {"name": "H.264 (Barcha telefonlar uchun)", "val": "libx264"},
     {"name": "H.265 / HEVC (Kichik hajm, yuqori sifat)", "val": "libx265"},
     {"name": "VP9 (WebM / YouTube kodeki)", "val": "libvpx-vp9"},
     {"name": "MPEG-4 (Eski qurilmalar uchun)", "val": "mpeg4"},
     {"name": "Kodekni o'zgartirmasdan tez ko'chirish", "val": "copy"},
   ];
+
+  // Har bir konteyner hamma kodekni ham qabul qilmaydi (masalan WebM faqat VP9)
+  List<Map<String, String>> _codecsFor(String format) {
+    const Map<String, List<String>> allowed = {
+      "webm": ["libvpx-vp9", "copy"],
+      "mov": ["libx264", "libx265", "mpeg4", "copy"],
+      "avi": ["libx264", "mpeg4", "copy"],
+    };
+    final list = allowed[format];
+    if (list == null) return _codecs;
+    return _codecs.where((c) => list.contains(c["val"])).toList();
+  }
+
+  void _onFormatChanged(String format) {
+    setState(() {
+      _targetFormat = format;
+      final available = _codecsFor(format).map((c) => c["val"]!).toList();
+      if (!available.contains(_videoCodec)) _videoCodec = available.first;
+    });
+  }
 
   @override
   void initState() {
@@ -251,15 +296,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _initDeviceAndSync() async {
-    const androidIdPlugin = AndroidId();
-    final String? id = await androidIdPlugin.getId();
+    String? androidId;
+    try {
+      androidId = await const AndroidId().getId();
+    } catch (_) {}
     final prefs = await SharedPreferences.getInstance();
 
-    final String deviceId = id ?? "unknown_device";
+    final String deviceId = androidId ?? "unknown_device";
     final String email = prefs.getString('user_email') ?? "";
+    final String? userId = prefs.getString('user_id');
     int localSec = prefs.getInt('total_seconds') ?? 0;
     bool localPro = prefs.getBool('is_pro') ?? false;
 
+    if (!mounted) return;
     setState(() {
       _deviceId = deviceId;
       _userEmail = email;
@@ -268,34 +317,53 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
 
     try {
-      final String? userId = prefs.getString('user_id');
+      // Avval shu akkauntning o'z profili qidiriladi
+      Map<String, dynamic>? ownProfile;
+      if (userId != null) {
+        ownProfile = await Supabase.instance.client
+            .from('user_profiles')
+            .select()
+            .eq('id', userId)
+            .maybeSingle();
+      }
 
-      // Ilova o'chirib qayta o'rnatilganda ham ANDROID_ID yoki ID orqali topadi
-      final existing = await Supabase.instance.client
-          .from('user_profiles')
-          .select()
-          .or('id.eq.$userId,android_id.eq.$deviceId')
-          .limit(1)
-          .maybeSingle();
+      // Ilova o'chirib qayta o'rnatilganda ham ANDROID_ID orqali topadi
+      Map<String, dynamic>? profile = ownProfile;
+      if (profile == null && androidId != null) {
+        profile = await Supabase.instance.client
+            .from('user_profiles')
+            .select()
+            .eq('android_id', androidId)
+            .order('is_pro', ascending: false)
+            .limit(1)
+            .maybeSingle();
+      }
 
-      if (existing != null) {
-        final int serverSec = existing['total_seconds'] ?? 0;
-        final bool serverPro = existing['is_pro'] ?? false;
-        final bool payReq = existing['payment_requested'] ?? false;
+      if (profile != null) {
+        final int serverSec = (profile['total_seconds'] as num?)?.toInt() ?? 0;
+        final bool serverPro = profile['is_pro'] == true;
+        final bool payReq = profile['payment_requested'] == true;
 
         if (serverSec > _totalSeconds) {
-          _totalSeconds = serverSec;
-          await prefs.setInt('total_seconds', _totalSeconds);
+          await prefs.setInt('total_seconds', serverSec);
         }
-        _isPro = serverPro;
-        _paymentRequested = payReq;
-        await prefs.setBool('is_pro', _isPro);
-        setState(() {});
-      } else if (userId != null) {
+        await prefs.setBool('is_pro', serverPro);
+        if (mounted) {
+          setState(() {
+            if (serverSec > _totalSeconds) _totalSeconds = serverSec;
+            _isPro = serverPro;
+            _paymentRequested = payReq;
+          });
+        }
+      }
+
+      // Shu akkaunt uchun qator bo'lmasa yaratiladi (aks holda sinxronlash va
+      // to'lov so'rovi hech qayerga yozilmay qoladi)
+      if (ownProfile == null && userId != null) {
         await Supabase.instance.client.from('user_profiles').upsert({
           'id': userId,
           'email': email,
-          'android_id': _deviceId,
+          'android_id': deviceId,
           'total_seconds': _totalSeconds,
           'is_pro': _isPro,
         });
@@ -305,11 +373,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _startTimer() {
     _usageTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
+      if (!mounted) return;
       setState(() => _totalSeconds += 10);
+      _timerTicks++;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('total_seconds', _totalSeconds);
 
-      if (_totalSeconds % 60 == 0) {
+      // Har 1 daqiqada serverga sinxronlanadi
+      if (_timerTicks % 6 == 0) {
         await _syncToServer();
       }
     });
@@ -332,7 +403,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             .maybeSingle();
 
         if (res != null && mounted) {
-          final bool serverPro = res['is_pro'] ?? false;
+          final bool serverPro = res['is_pro'] == true;
           if (serverPro != _isPro) {
             setState(() => _isPro = serverPro);
             await prefs.setBool('is_pro', serverPro);
@@ -343,70 +414,245 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _pickFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      type: FileType.any,
-    );
-    if (result != null) {
-      if (!_isPro && result.files.length > 3) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Bepul tarifda 3 tagacha fayl! 20+ fayl uchun PRO tarifni yoqing."),
-            ),
-          );
-        }
-        setState(() => _selectedFiles = result.files.take(3).toList());
-      } else {
-        setState(() => _selectedFiles = result.files);
+    List<PlatformFile> files;
+    try {
+      files = await FilePicker.pickFiles(type: FileType.any);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Fayllarni tanlab bo'lmadi: $e")),
+        );
       }
+      return;
+    }
+    if (files.isEmpty || !mounted) return;
+
+    if (!_isPro && files.length > 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Bepul tarifda 3 tagacha fayl! 20+ fayl uchun PRO tarifni yoqing."),
+        ),
+      );
+      setState(() => _selectedFiles = files.take(3).toList());
+    } else {
+      setState(() => _selectedFiles = files.toList());
     }
   }
 
+  // Download papkasiga yozib bo'lmasa (Android 10 va undan eski), ilovaning o'z papkasi ishlatiladi
+  Future<Directory> _resolveOutputDir() async {
+    final download = Directory(_publicDownloadDir);
+    try {
+      if (await download.exists()) {
+        final probe = File("${download.path}/anytoany_${DateTime.now().microsecondsSinceEpoch}.tmp");
+        await probe.writeAsString("ok", flush: true);
+        await probe.delete();
+        return download;
+      }
+    } catch (_) {}
+    return await getExternalStorageDirectory() ?? await getApplicationDocumentsDirectory();
+  }
+
+  // Mavjud faylni ustidan yozmaslik uchun takrorlanmas nom tanlaydi
+  String _uniquePath(Directory dir, String baseName, String ext, Set<String> usedPaths) {
+    String path = "${dir.path}/$baseName.$ext";
+    for (int n = 1; usedPaths.contains(path) || File(path).existsSync(); n++) {
+      path = "${dir.path}/${baseName}_$n.$ext";
+    }
+    usedPaths.add(path);
+    return path;
+  }
+
+  List<String> _ffmpegArgs(String inPath, String outPath) {
+    final args = <String>["-y", "-i", inPath];
+    if (_videoFormats.contains(_targetFormat)) {
+      args.addAll(["-c:v", _videoCodec]);
+      if (_videoCodec != "copy") {
+        // Ko'p pleyerlar faqat yuv420p va juft o'lchamli videoni o'qiy oladi
+        args.addAll(["-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"]);
+      }
+      final String audioCodec = switch (_targetFormat) {
+        "webm" => "libvorbis",
+        "avi" => "libmp3lame",
+        _ => "aac",
+      };
+      args.addAll(["-c:a", audioCodec]);
+    } else if (_audioFormats.contains(_targetFormat)) {
+      args.add("-vn");
+    } else if (_imageFormats.contains(_targetFormat)) {
+      args.addAll(["-an", "-frames:v", "1", "-update", "1"]);
+    }
+    args.add(outPath);
+    return args;
+  }
+
+  Future<bool> _runFfmpeg(List<String> args) async {
+    final session = await FFmpegKit.executeWithArguments(args);
+    return ReturnCode.isSuccess(await session.getReturnCode());
+  }
+
+  Future<void> _deleteQuietly(String path) async {
+    try {
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
+  }
+
+  // PDF ning har bir sahifasini alohida rasm qilib saqlaydi
+  Future<void> _pdfToImages(String pdfPath, Directory outDir, String baseName, Set<String> usedPaths) async {
+    final document = await pdfx.PdfDocument.openFile(pdfPath);
+    try {
+      for (int n = 1; n <= document.pagesCount; n++) {
+        final page = await document.getPage(n);
+        try {
+          final image = await page.render(
+            width: page.width * 2,
+            height: page.height * 2,
+            format: _targetFormat == "png" ? pdfx.PdfPageImageFormat.png : pdfx.PdfPageImageFormat.jpeg,
+            backgroundColor: '#FFFFFF',
+          );
+          if (image == null) throw Exception("$n-sahifani chizib bo'lmadi");
+          final pageName = document.pagesCount > 1 ? "${baseName}_$n-bet" : baseName;
+          await File(_uniquePath(outDir, pageName, _targetFormat, usedPaths)).writeAsBytes(image.bytes, flush: true);
+        } finally {
+          await page.close();
+        }
+      }
+    } finally {
+      await document.close();
+    }
+  }
+
+  // Rasmni bir sahifali PDF ga joylaydi. Xato bo'lsa sababini qaytaradi
+  Future<String?> _imageToPdf(String imagePath, String ext, String outPath) async {
+    String jpgPath = imagePath;
+    String? tempPath;
+    if (ext != "jpg" && ext != "jpeg") {
+      // JPEG PDF ichiga qayta siqilmasdan joylanadi, boshqa rasmlar avval JPEG ga o'tkaziladi
+      final tempDir = await getTemporaryDirectory();
+      tempPath = "${tempDir.path}/anytoany_${DateTime.now().microsecondsSinceEpoch}.jpg";
+      final ok = await _runFfmpeg(
+        ["-y", "-i", imagePath, "-frames:v", "1", "-update", "1", "-q:v", "2", tempPath],
+      );
+      if (!ok) {
+        await _deleteQuietly(tempPath);
+        return "rasmni o'qib bo'lmadi";
+      }
+      jpgPath = tempPath;
+    }
+
+    try {
+      final image = pw.MemoryImage(await File(jpgPath).readAsBytes());
+      final double ratio = (image.height ?? 1) / (image.width ?? 1);
+      final pageFormat = pdf.PdfPageFormat(pdf.PdfPageFormat.a4.width, pdf.PdfPageFormat.a4.width * ratio);
+      final document = pw.Document();
+      document.addPage(
+        pw.Page(
+          pageFormat: pageFormat,
+          margin: pw.EdgeInsets.zero,
+          build: (_) => pw.Center(child: pw.Image(image)),
+        ),
+      );
+      await File(outPath).writeAsBytes(await document.save(), flush: true);
+      return null;
+    } finally {
+      if (tempPath != null) await _deleteQuietly(tempPath);
+    }
+  }
+
+  // Bitta faylni aylantiradi. Muvaffaqiyatli bo'lsa null, aks holda xato sababini qaytaradi
+  Future<String?> _convertOne(PlatformFile file, Directory outDir, Set<String> usedPaths) async {
+    final inPath = file.path;
+    if (inPath == null) return "fayl manzili topilmadi";
+    final ext = (file.extension ?? "").toLowerCase();
+    final baseName = "${file.name.replaceAll(RegExp(r'\.[^\.]+$'), '')}_ANYtoANY";
+
+    // FFmpeg PDF bilan ishlamaydi, shuning uchun PDF alohida aylantiriladi
+    if (ext == "pdf") {
+      if (!_imageFormats.contains(_targetFormat)) {
+        return "PDF faylni faqat PNG yoki JPG ga aylantirish mumkin";
+      }
+      await _pdfToImages(inPath, outDir, baseName, usedPaths);
+      return null;
+    }
+    if (_targetFormat == "pdf") {
+      if (!_imageInputs.contains(ext)) {
+        return "PDF ga faqat rasm fayllarni aylantirish mumkin";
+      }
+      final outPath = _uniquePath(outDir, baseName, "pdf", usedPaths);
+      final error = await _imageToPdf(inPath, ext, outPath);
+      if (error != null) await _deleteQuietly(outPath);
+      return error;
+    }
+
+    final outPath = _uniquePath(outDir, baseName, _targetFormat, usedPaths);
+    if (await _runFfmpeg(_ffmpegArgs(inPath, outPath))) return null;
+    await _deleteQuietly(outPath);
+    return "bu faylni .$_targetFormat ga aylantirib bo'lmadi";
+  }
+
   Future<void> _convertFilesOffline() async {
-    if (_selectedFiles.isEmpty) return;
+    if (_selectedFiles.isEmpty || _isConverting) return;
+    final files = List<PlatformFile>.of(_selectedFiles);
     setState(() {
       _isConverting = true;
       _completedCount = 0;
+      _failedCount = 0;
     });
 
-    Directory? outDir = Directory('/storage/emulated/0/Download');
-    if (!await outDir.exists()) {
-      outDir = await getExternalStorageDirectory() ?? await getApplicationDocumentsDirectory();
+    final errors = <String>[];
+    int done = 0;
+    String savedTo = "";
+    try {
+      final outDir = await _resolveOutputDir();
+      savedTo = outDir.path == _publicDownloadDir ? "Download papkasiga" : "${outDir.path} papkasiga";
+      final usedPaths = <String>{};
+
+      // PDF sahifalarini parallel chizib bo'lmaydi, qolgan fayllar 4 tadan aylantiriladi
+      final bool hasPdf =
+          _targetFormat == "pdf" || files.any((f) => (f.extension ?? "").toLowerCase() == "pdf");
+      final int batchSize = hasPdf ? 1 : 4;
+
+      for (int i = 0; i < files.length; i += batchSize) {
+        final batch = files.skip(i).take(batchSize);
+        await Future.wait(batch.map((file) async {
+          String? error;
+          try {
+            error = await _convertOne(file, outDir, usedPaths);
+          } catch (e) {
+            error = "$e";
+          }
+          if (error == null) {
+            done++;
+          } else {
+            errors.add("${file.name}: $error");
+          }
+          if (mounted) {
+            setState(() {
+              _completedCount = done;
+              _failedCount = errors.length;
+            });
+          }
+        }));
+      }
+    } catch (e) {
+      errors.add("$e");
+    } finally {
+      if (mounted) setState(() => _isConverting = false);
     }
 
-    const int batchSize = 4;
-    for (int i = 0; i < _selectedFiles.length; i += batchSize) {
-      final batch = _selectedFiles.skip(i).take(batchSize);
-      await Future.wait(batch.map((file) async {
-        if (file.path == null) return;
-        final baseName = file.name.replaceAll(RegExp(r'\.[^\.]+$'), '');
-        final outPath = "${outDir!.path}/${baseName}_ANYtoANY.$_targetFormat";
-
-        String cmd = "";
-        if (["mp4", "mkv", "webm", "mov", "avi"].contains(_targetFormat)) {
-          cmd = '-y -i "${file.path}" -c:v $_videoCodec -c:a aac "$outPath"';
-        } else {
-          cmd = '-y -i "${file.path}" "$outPath"';
-        }
-
-        final session = await FFmpegKit.execute(cmd);
-        final rc = await session.getReturnCode();
-        if (ReturnCode.isSuccess(rc) && mounted) {
-          setState(() => _completedCount++);
-        }
-      }));
+    if (!mounted) return;
+    String message = done > 0
+        ? "Tayyor! $done ta fayl $savedTo saqlandi."
+        : "Hech bir fayl aylantirilmadi.";
+    if (errors.isNotEmpty) {
+      final String firstError =
+          errors.first.length > 160 ? "${errors.first.substring(0, 160)}..." : errors.first;
+      message += "\n${errors.length} ta xatolik. $firstError";
     }
-
-    setState(() => _isConverting = false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          duration: const Duration(seconds: 5),
-          content: Text("Tayyor! $_completedCount ta fayl Download papkasiga saqlandi."),
-        ),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(duration: const Duration(seconds: 6), content: Text(message)),
+    );
   }
 
   // Mijoz kartaga pul o'tkazgach so'rov yuborishi
@@ -414,21 +660,47 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString('user_id');
-      if (userId != null) {
-        await Supabase.instance.client.from('user_profiles').update({
-          'payment_requested': true,
-          'payment_info': cardDetails,
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', userId);
-
-        setState(() => _paymentRequested = true);
+      if (userId == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("To'lov ma'lumoti yuborildi! Admin tasdiqlashi bilan PRO avtomatik yonadi."),
-            ),
+            const SnackBar(content: Text("Avval ilovaga qaytadan kiring!")),
           );
         }
+        return;
+      }
+
+      final String now = DateTime.now().toIso8601String();
+      final updated = await Supabase.instance.client
+          .from('user_profiles')
+          .update({
+            'payment_requested': true,
+            'payment_info': cardDetails,
+            'updated_at': now,
+          })
+          .eq('id', userId)
+          .select('id');
+
+      // Profil qatori hali yaratilmagan bo'lsa, so'rov yo'qolib ketmasligi uchun yaratiladi
+      if (updated.isEmpty) {
+        await Supabase.instance.client.from('user_profiles').upsert({
+          'id': userId,
+          'email': _userEmail,
+          'android_id': _deviceId,
+          'total_seconds': _totalSeconds,
+          'is_pro': _isPro,
+          'payment_requested': true,
+          'payment_info': cardDetails,
+          'updated_at': now,
+        });
+      }
+
+      if (mounted) {
+        setState(() => _paymentRequested = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("To'lov ma'lumoti yuborildi! Admin tasdiqlashi bilan PRO avtomatik yonadi."),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -637,30 +909,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       items: _formats
                           .map((f) => DropdownMenuItem(value: f, child: Text(f.toUpperCase())))
                           .toList(),
-                      onChanged: _isConverting ? null : (v) => setState(() => _targetFormat = v!),
+                      onChanged: _isConverting
+                          ? null
+                          : (v) {
+                              if (v != null) _onFormatChanged(v);
+                            },
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            if (["mp4", "mkv", "webm", "mov", "avi"].contains(_targetFormat))
-              DropdownButtonFormField<String>(
-                value: _videoCodec,
+            if (_videoFormats.contains(_targetFormat))
+              InputDecorator(
                 decoration: const InputDecoration(
                   labelText: "Video Kodekni tanlang",
                   border: OutlineInputBorder(),
                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
-                items: _codecs
-                    .map((c) => DropdownMenuItem(value: c["val"], child: Text(c["name"]!)))
-                    .toList(),
-                onChanged: _isConverting ? null : (v) => setState(() => _videoCodec = v!),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _videoCodec,
+                    isExpanded: true,
+                    isDense: true,
+                    items: _codecsFor(_targetFormat)
+                        .map((c) => DropdownMenuItem<String>(
+                              value: c["val"]!,
+                              child: Text(c["name"]!, overflow: TextOverflow.ellipsis),
+                            ))
+                        .toList(),
+                    onChanged: _isConverting
+                        ? null
+                        : (v) {
+                            if (v != null) setState(() => _videoCodec = v);
+                          },
+                  ),
+                ),
               ),
             const SizedBox(height: 10),
             if (_isConverting) ...[
               LinearProgressIndicator(
-                value: _selectedFiles.isEmpty ? 0 : _completedCount / _selectedFiles.length,
+                value: _selectedFiles.isEmpty
+                    ? 0
+                    : (_completedCount + _failedCount) / _selectedFiles.length,
               ),
               const SizedBox(height: 4),
               Text("Aylantirilmoqda: $_completedCount / ${_selectedFiles.length}"),
@@ -685,7 +976,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             color: isPdf ? Colors.redAccent : Colors.tealAccent,
                           ),
                           title: Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          subtitle: Text("${(f.size / 1024 / 1024).toStringAsFixed(2)} MB -> .$_targetFormat"),
+                          subtitle: Text(
+                            "${((f.lengthSync() ?? 0) / 1024 / 1024).toStringAsFixed(2)} MB -> .$_targetFormat",
+                          ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -763,16 +1056,31 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           .select()
           .order('payment_requested', ascending: false)
           .order('updated_at', ascending: false);
-      setState(() => _users = data);
-    } catch (_) {}
-    setState(() => _loading = false);
+      if (mounted) setState(() => _users = data);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Ro'yxatni yuklab bo'lmadi: $e")),
+        );
+      }
+    }
+    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _toggleUserPro(String id, bool currentPro) async {
-    await Supabase.instance.client.from('user_profiles').update({
-      'is_pro': !currentPro,
-      'payment_requested': false,
-    }).eq('id', id);
+    try {
+      await Supabase.instance.client.from('user_profiles').update({
+        'is_pro': !currentPro,
+        'payment_requested': false,
+      }).eq('id', id);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("O'zgartirib bo'lmadi: $e")),
+        );
+      }
+      return;
+    }
     await _loadUsers();
   }
 
@@ -791,9 +1099,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               itemCount: _users.length,
               itemBuilder: (ctx, i) {
                 final u = _users[i];
-                final bool isPro = u['is_pro'] ?? false;
-                final bool payReq = u['payment_requested'] ?? false;
-                final int mins = (u['total_seconds'] ?? 0) ~/ 60;
+                final bool isPro = u['is_pro'] == true;
+                final bool payReq = u['payment_requested'] == true;
+                final int mins = ((u['total_seconds'] as num?)?.toInt() ?? 0) ~/ 60;
                 return Card(
                   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   child: ListTile(
@@ -808,7 +1116,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                             ? Colors.green
                             : (payReq ? Colors.orange : Colors.blueGrey),
                       ),
-                      onPressed: () => _toggleUserPro(u['id'], isPro),
+                      onPressed: () => _toggleUserPro(u['id'].toString(), isPro),
                       child: Text(isPro ? "PRO O'chirish" : "PRO Yoqish"),
                     ),
                   ),
