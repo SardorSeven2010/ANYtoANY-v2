@@ -14,8 +14,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:pdfx/pdfx.dart' as pdfx;
 
 // ================= SOZLAMALAR (SHU YERNI TO'LDIRING) =================
-const String SUPABASE_URL = "https://sdectcjfuiswahjfdwme.supabase.co";
-const String SUPABASE_KEY = "sb_publishable_pDWa6T015D6fMYOEn5jAIg_Wog39wND";
+const String SUPABASE_URL = "https://fqswjksqlmtsiokwmsdy.supabase.co";
+const String SUPABASE_KEY = "sb_publishable_gR8RxvY6nhzN4V1ZgMilhw_xkPxvIhS";
 const String MY_CARD_NUMBER = "4466136952399476"; // O'zingizning Uzcard yoki Humo kartangiz
 const String MY_CARD_OWNER = "Sardor Madiyorov"; // Karta egasi ismi
 const String PRO_PRICE = "24 000 so'm"; // PRO tarif narxi
