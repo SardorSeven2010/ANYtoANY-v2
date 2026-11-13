@@ -53,7 +53,9 @@ sozlanmagan" degan xabar chiqadi, qolgan hamma narsa ishlayveradi.
 ### 4.2. Funksiyani joylash
 
 1. Supabase → **Edge Functions** → **Deploy a new function** → **Via Editor**.
-2. Nomi aynan shunday bo'lsin: `convert-document`.
+2. Funksiya nomi ilovadagi `convertFunctionName` (`lib/config.dart`) bilan bir xil
+   bo'lishi kerak. Hozir u `quick-worker`, ya'ni funksiya manzili
+   `https://<loyiha>.supabase.co/functions/v1/quick-worker` bo'lishi kerak.
 3. [`functions/convert-document/index.ts`](functions/convert-document/index.ts)
    faylining hammasini nusxalab qo'ying.
 4. **Deploy** ni bosing.

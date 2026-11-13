@@ -6,8 +6,10 @@ const String cardNumber = "4466136952399476"; // O'zingizning Uzcard yoki Humo k
 const String cardOwner = "Sardor Madiyorov"; // Karta egasi ismi
 const String supportPhone = "+998887028708"; // Qo'llab-quvvatlash xizmati raqami
 
-// PDF ni Word / PowerPoint / Excel ga aylantiradigan Supabase Edge Function nomi
-const String convertFunctionName = "convert-document";
+// PDF ni Word / PowerPoint / Excel ga aylantiradigan Supabase Edge Function nomi.
+// Supabase'dagi funksiya manzilining oxirgi qismi bilan bir xil bo'lishi kerak:
+// https://<loyiha>.supabase.co/functions/v1/quick-worker
+const String convertFunctionName = "quick-worker";
 
 // Bepul tarifda bir martada tanlash mumkin bo'lgan fayllar soni
 const int freeFileLimit = 3;
