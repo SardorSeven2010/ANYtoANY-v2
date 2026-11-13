@@ -17,6 +17,12 @@ dependencies:
   path_provider: ^2.1.6
   pdfx: ^2.11.0
   pdf: ^3.13.1
+  video_player: ^2.14.1
+  wakelock_plus: ^1.8.2
+  url_launcher: ^6.3.3
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/auth.jpg
+    - assets/backgrounds/
