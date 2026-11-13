@@ -1,0 +1,54 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Kodlarni yuklab olish
+        uses: actions/checkout@v4
+
+      - name: Java 17 o'rnatish
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Flutter o'rnatish
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+
+      - name: Android papkani yaratish va asl ANYtoANY kodlarini tiklash
+        run: |
+          cp pubspec.yaml /tmp/user_pubspec.yaml
+          if [ -f "lib/main.dart" ]; then
+            cp lib/main.dart /tmp/user_main.dart
+          elif [ -f "main.dart" ]; then
+            cp main.dart /tmp/user_main.dart
+          fi
+          flutter create --platforms=android --org com.anytoany.converter --project-name any_to_any .
+          cp /tmp/user_pubspec.yaml pubspec.yaml
+          mkdir -p lib
+          cp /tmp/user_main.dart lib/main.dart
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/g' android/app/build.gradle || true
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/g' android/app/build.gradle || true
+          sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET"/>\n<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>' android/app/src/main/AndroidManifest.xml
+
+      - name: Kutubxonalarni o'rnatish
+        run: flutter pub get
+
+      - name: Release APK yig'ish
+        run: flutter build apk --release
+
+      - name: Tayyor APK faylni yuklashga chiqarish
+        uses: actions/upload-artifact@v4
+        with:
+          name: ANYtoANY-Full-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
