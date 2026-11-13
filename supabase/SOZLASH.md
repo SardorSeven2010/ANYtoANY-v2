@@ -33,6 +33,10 @@ Admin panelda u ro'yxatning tepasida, sariq hoshiyada chiqadi:
 
 Muddat tugagach PRO o'zi o'chadi.
 
+PRO nima beradi: barcha video kodeklar (bepul tarifda faqat H.264), PDF ni
+Word / PowerPoint / Excel ga aylantirish va cheklanmagan sondagi fayl
+(bepul tarifda bir martada 3 ta).
+
 ## 4. PDF ni Word / PowerPoint / Excel ga aylantirish (ixtiyoriy)
 
 Bu imkoniyat Adobe PDF Services orqali ishlaydi: oyiga 500 ta hujjat bepul,

@@ -1,90 +1,11 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../app_theme.dart';
 import '../services/media_tools.dart';
-
-// ================= PLEYER: FAYL TANLASH =================
-class PlayerPickScreen extends StatelessWidget {
-  const PlayerPickScreen({super.key});
-
-  Future<void> _pick(BuildContext context, FileType type) async {
-    PlatformFile? file;
-    try {
-      file = await FilePicker.pickFile(type: type);
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Faylni tanlab bo'lmadi: $e")),
-        );
-      }
-      return;
-    }
-    final path = file?.path;
-    if (file == null || path == null || !context.mounted) return;
-    final String name = file.name;
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => PlayerScreen(path: path, title: name)),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return AppScaffold(
-      appBar: AppBar(title: const Text("Pleyer")),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  Icon(Icons.play_circle_fill_rounded, size: 72, color: scheme.primary),
-                  const SizedBox(height: 8),
-                  const Text(
-                    "Video va audio pleyer",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "Telefoningizdagi video yoki audio faylni tanlang",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: scheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () => _pick(context, FileType.video),
-            icon: const Icon(Icons.movie_rounded),
-            label: const Text("Video tanlash"),
-          ),
-          const SizedBox(height: 12),
-          FilledButton.tonalIcon(
-            onPressed: () => _pick(context, FileType.audio),
-            icon: const Icon(Icons.audiotrack_rounded),
-            label: const Text("Audio tanlash"),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () => _pick(context, FileType.any),
-            icon: const Icon(Icons.folder_open_rounded),
-            label: const Text("Fayllardan tanlash"),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ================= VIDEO VA AUDIO PLEYER =================
 class PlayerScreen extends StatefulWidget {

@@ -5,6 +5,7 @@ import '../app_theme.dart';
 import '../config.dart';
 import '../services/media_tools.dart';
 import '../services/profile_service.dart';
+import 'subscription_screen.dart';
 import 'viewers.dart';
 
 enum ConverterMode { media, videoToAudio, pdfImage }
@@ -62,11 +63,31 @@ class _ConverterScreenState extends State<ConverterScreen> {
   }
 
   void _onFormatChanged(String format) {
+    final bool pro = profile.proActive;
+    if (!pro && formatNeedsPro(format)) {
+      _showProRequired("${format.toUpperCase()} formati faqat PRO obunada ochiladi.");
+      return;
+    }
     setState(() {
       _targetFormat = format;
-      final available = codecsFor(format).map((c) => c.value).toList();
+      final available =
+          codecsFor(format).map((c) => c.value).where((c) => codecAllowed(c, pro: pro)).toList();
       if (!available.contains(_videoCodec)) _videoCodec = available.first;
     });
+  }
+
+  void _openSubscription() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+  }
+
+  void _showProRequired(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 5),
+        content: Text(message),
+        action: SnackBarAction(label: "PRO olish", onPressed: _openSubscription),
+      ),
+    );
   }
 
   Future<void> _pickFiles() async {
@@ -95,6 +116,11 @@ class _ConverterScreenState extends State<ConverterScreen> {
 
   Future<void> _convert() async {
     if (_selectedFiles.isEmpty || _isConverting) return;
+    // Obuna tugab qolgan bo'lsa, PRO kodek bilan aylantirib bo'lmaydi
+    if (videoFormats.contains(_targetFormat) && !codecAllowed(_videoCodec, pro: profile.proActive)) {
+      _showProRequired("Tanlangan kodek faqat PRO obunada ishlaydi.");
+      return;
+    }
     final files = List<PlatformFile>.of(_selectedFiles);
     setState(() {
       _isConverting = true;
@@ -175,7 +201,13 @@ class _ConverterScreenState extends State<ConverterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // PRO holati o'zgarsa (masalan obuna yoqilsa), kodeklar ro'yxati yangilanadi
+    return ListenableBuilder(listenable: profile, builder: (context, _) => _content(context));
+  }
+
+  Widget _content(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final bool pro = profile.proActive;
     final bool isVideoTarget = videoFormats.contains(_targetFormat);
     final bool hasBitrate = bitrateFormats.contains(_targetFormat);
 
@@ -199,7 +231,12 @@ class _ConverterScreenState extends State<ConverterScreen> {
                   DropdownButton<String>(
                     value: _targetFormat,
                     items: _formats
-                        .map((f) => DropdownMenuItem<String>(value: f, child: Text(f.toUpperCase())))
+                        .map((f) => DropdownMenuItem<String>(
+                              value: f,
+                              child: Text(
+                                !pro && formatNeedsPro(f) ? "${f.toUpperCase()} (PRO)" : f.toUpperCase(),
+                              ),
+                            ))
                         .toList(),
                     onChanged: _isConverting
                         ? null
@@ -222,12 +259,27 @@ class _ConverterScreenState extends State<ConverterScreen> {
                     value: _videoCodec,
                     isExpanded: true,
                     isDense: true,
-                    items: codecsFor(_targetFormat)
-                        .map((c) => DropdownMenuItem<String>(
-                              value: c.value,
-                              child: Text(c.name, overflow: TextOverflow.ellipsis),
-                            ))
-                        .toList(),
+                    items: codecsFor(_targetFormat).map((c) {
+                      final bool allowed = codecAllowed(c.value, pro: pro);
+                      return DropdownMenuItem<String>(
+                        value: c.value,
+                        enabled: allowed,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                c.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: allowed
+                                    ? null
+                                    : TextStyle(color: scheme.onSurface.withValues(alpha: 0.45)),
+                              ),
+                            ),
+                            if (!allowed) const _ProBadge(),
+                          ],
+                        ),
+                      );
+                    }).toList(),
                     onChanged: _isConverting
                         ? null
                         : (v) {
@@ -237,6 +289,18 @@ class _ConverterScreenState extends State<ConverterScreen> {
                 ),
               ),
             ],
+            if (isVideoTarget && !pro)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      "Bepul tarifda faqat H.264. Qolgan kodeklar PRO obunada.",
+                      style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                    ),
+                  ),
+                  TextButton(onPressed: _openSubscription, child: const Text("PRO olish")),
+                ],
+              ),
             if (hasBitrate) ...[
               const SizedBox(height: 10),
               InputDecorator(
@@ -390,6 +454,26 @@ class _ConverterScreenState extends State<ConverterScreen> {
               onPressed: () => openFile(context, path),
             )
           : null,
+    );
+  }
+}
+
+class _ProBadge extends StatelessWidget {
+  const _ProBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(left: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade600,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Text(
+        "PRO",
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.black),
+      ),
     );
   }
 }

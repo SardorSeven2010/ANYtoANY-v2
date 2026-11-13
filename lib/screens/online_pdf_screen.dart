@@ -8,6 +8,7 @@ import '../services/profile_service.dart';
 import 'subscription_screen.dart';
 
 // ================= PDF -> WORD / POWERPOINT / EXCEL (INTERNET ORQALI) =================
+// Faqat PRO obunachilar uchun. Bir nechta PDF ni birdaniga tanlash mumkin.
 class OnlinePdfScreen extends StatefulWidget {
   const OnlinePdfScreen({super.key});
 
@@ -16,7 +17,7 @@ class OnlinePdfScreen extends StatefulWidget {
 }
 
 class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
-  PlatformFile? _file;
+  List<PlatformFile> _files = [];
   String _format = onlineTargets.first.format;
   bool _busy = false;
   String _stage = "";
@@ -31,49 +32,68 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
 
   Future<void> _pick() async {
     try {
-      final file = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ["pdf"]);
-      if (file != null && mounted) setState(() => _file = file);
+      final picked = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ["pdf"]);
+      final pdfs = picked.where((f) => f.path != null && isPdfFile(f.name)).toList();
+      if (pdfs.isNotEmpty && mounted) setState(() => _files = pdfs);
     } catch (e) {
-      _show("Faylni tanlab bo'lmadi: $e");
+      _show("Fayllarni tanlab bo'lmadi: $e");
     }
   }
 
   Future<void> _convert() async {
-    final file = _file;
-    final path = file?.path;
-    if (file == null || path == null || _busy) return;
-    if (!isPdfFile(file.name)) {
-      _show("Faqat PDF fayl tanlang.");
-      return;
-    }
-
+    if (_files.isEmpty || _busy) return;
+    final files = List<PlatformFile>.of(_files);
     setState(() {
       _busy = true;
       _stage = "Tayyorlanmoqda...";
     });
-    String? outPath;
+
+    int done = 0;
+    String? error;
+    String savedTo = "";
     try {
       final outDir = await resolveOutputDir();
-      outPath = uniquePath(outDir, "${baseNameOf(file.name)}_ANYtoANY", _format, <String>{});
-      await convertPdfOnline(
-        pdfPath: path,
-        targetFormat: _format,
-        outPath: outPath,
-        onStage: (stage) {
-          if (mounted) setState(() => _stage = stage);
-        },
-      );
-      final String saved = outPath;
-      if (mounted) setState(() => _results.insert(0, saved));
-      _show("Tayyor! Fayl ${outputDirLabel(outDir)} saqlandi.");
+      savedTo = outputDirLabel(outDir);
+      final usedPaths = <String>{};
+      for (int i = 0; i < files.length; i++) {
+        final file = files[i];
+        final outPath = uniquePath(outDir, "${baseNameOf(file.name)}_ANYtoANY", _format, usedPaths);
+        final String prefix = files.length > 1 ? "${i + 1}/${files.length}: " : "";
+        try {
+          await convertPdfOnline(
+            pdfPath: file.path!,
+            targetFormat: _format,
+            outPath: outPath,
+            onStage: (stage) {
+              if (mounted) setState(() => _stage = "$prefix$stage");
+            },
+          );
+        } catch (_) {
+          await deleteQuietly(outPath);
+          rethrow;
+        }
+        done++;
+        if (mounted) {
+          setState(() {
+            _results.insert(0, outPath);
+            _files.remove(file);
+          });
+        }
+      }
     } on OnlinePdfException catch (e) {
-      if (outPath != null) await deleteQuietly(outPath);
-      _show(e.message);
+      error = e.message;
     } catch (_) {
-      if (outPath != null) await deleteQuietly(outPath);
-      _show("Internet bilan bog'lanib bo'lmadi. Qayta urinib ko'ring.");
+      error = "Internet bilan bog'lanib bo'lmadi. Qayta urinib ko'ring.";
     }
     if (mounted) setState(() => _busy = false);
+
+    if (error == null) {
+      _show("Tayyor! $done ta fayl $savedTo saqlandi.");
+    } else if (done > 0) {
+      _show("$done ta fayl $savedTo saqlandi, keyin to'xtadi: $error");
+    } else {
+      _show(error);
+    }
   }
 
   @override
@@ -106,7 +126,7 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                "PDF faylni tahrirlanadigan Word, PowerPoint va Excel hujjatiga aylantirish PRO obunada ochiladi.",
+                "PDF fayllarni tahrirlanadigan Word, PowerPoint va Excel hujjatiga aylantirish PRO obunada ochiladi.",
                 textAlign: TextAlign.center,
                 style: TextStyle(color: scheme.onSurfaceVariant),
               ),
@@ -128,7 +148,6 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
 
   List<Widget> _converter(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final file = _file;
     return [
       Card(
         child: Padding(
@@ -151,12 +170,20 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
               OutlinedButton.icon(
                 onPressed: _busy ? null : _pick,
                 icon: const Icon(Icons.picture_as_pdf_rounded),
-                label: Text(
-                  file == null ? "PDF fayl tanlash" : file.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                label: Text(_files.isEmpty ? "PDF fayllarni tanlash" : "Boshqa fayllarni tanlash"),
               ),
+              for (final file in _files)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.picture_as_pdf_rounded),
+                  title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    tooltip: "Olib tashlash",
+                    onPressed: _busy ? null : () => setState(() => _files.remove(file)),
+                  ),
+                ),
               const SizedBox(height: 14),
               const Text("Qaysi formatga:", style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
@@ -170,9 +197,9 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
               ),
               const SizedBox(height: 16),
               FilledButton.icon(
-                onPressed: (file == null || _busy) ? null : _convert,
+                onPressed: (_files.isEmpty || _busy) ? null : _convert,
                 icon: const Icon(Icons.bolt_rounded),
-                label: Text(_busy ? _stage : "Aylantirish"),
+                label: Text(_busy ? _stage : "Aylantirish (${_files.length} ta)"),
               ),
               if (_busy) ...[
                 const SizedBox(height: 12),

@@ -5,12 +5,14 @@ import '../app_theme.dart';
 import '../services/profile_service.dart';
 import '../widgets/app_drawer.dart';
 import 'converter_screen.dart';
+import 'media_library.dart';
 import 'online_pdf_screen.dart';
-import 'player_screen.dart';
+import 'pdf_merge_screen.dart';
 import 'subscription_screen.dart';
 import 'viewers.dart';
 
 // ================= ASOSIY OYNA =================
+// Pastda 3 ta bo'lim: fayl konvertori, video fayllar, audio fayllar.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -19,6 +21,12 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  static const List<String> _titles = ["ANYtoANY", "Video fayllar", "Audio fayllar"];
+
+  int _tab = 0;
+  // Bo'lim birinchi marta ochilgandagina yuklanadi
+  final Set<int> _opened = {0};
+
   @override
   void initState() {
     super.initState();
@@ -47,20 +55,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
   }
 
-  Future<void> _openPdfReader() async {
-    try {
-      final file = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ["pdf"]);
-      final path = file?.path;
-      if (file == null || path == null || !mounted) return;
-      _open(PdfViewerScreen(pdfPath: path, fileName: file.name));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Faylni tanlab bo'lmadi: $e")),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -70,7 +64,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return AppScaffold(
           drawer: const AppDrawer(),
           appBar: AppBar(
-            title: const Text("ANYtoANY", style: TextStyle(fontWeight: FontWeight.w800)),
+            title: Text(_titles[_tab], style: const TextStyle(fontWeight: FontWeight.w800)),
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 10),
@@ -85,62 +79,113 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-            children: [
-              _statusCard(scheme),
-              const SizedBox(height: 16),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.98,
-                children: [
-                  _ToolCard(
-                    icon: Icons.transform_rounded,
-                    title: "Media konvertor",
-                    subtitle: "Video, audio va rasm formatlari",
-                    onTap: () => _open(const ConverterScreen(mode: ConverterMode.media)),
-                  ),
-                  _ToolCard(
-                    icon: Icons.audiotrack_rounded,
-                    title: "Videodan audio",
-                    subtitle: "Videodan ovozni ajratib olish",
-                    onTap: () => _open(const ConverterScreen(mode: ConverterMode.videoToAudio)),
-                  ),
-                  _ToolCard(
-                    icon: Icons.description_rounded,
-                    title: "PDF dan Word / PowerPoint",
-                    subtitle: "Tahrirlanadigan hujjat (onlayn)",
-                    pro: true,
-                    onTap: () => _open(const OnlinePdfScreen()),
-                  ),
-                  _ToolCard(
-                    icon: Icons.picture_as_pdf_rounded,
-                    title: "PDF va rasm",
-                    subtitle: "PDF dan rasm, rasmdan PDF",
-                    onTap: () => _open(const ConverterScreen(mode: ConverterMode.pdfImage)),
-                  ),
-                  _ToolCard(
-                    icon: Icons.play_circle_fill_rounded,
-                    title: "Pleyer",
-                    subtitle: "Video va audio ijro etish",
-                    onTap: () => _open(const PlayerPickScreen()),
-                  ),
-                  _ToolCard(
-                    icon: Icons.menu_book_rounded,
-                    title: "PDF o'qish",
-                    subtitle: "PDF faylni ochib ko'rish",
-                    onTap: _openPdfReader,
-                  ),
-                ],
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: _tab,
+            onDestinationSelected: (i) => setState(() {
+              _tab = i;
+              _opened.add(i);
+            }),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.transform_outlined),
+                selectedIcon: Icon(Icons.transform_rounded),
+                label: "Konvertor",
               ),
+              NavigationDestination(
+                icon: Icon(Icons.video_library_outlined),
+                selectedIcon: Icon(Icons.video_library_rounded),
+                label: "Video",
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.library_music_outlined),
+                selectedIcon: Icon(Icons.library_music_rounded),
+                label: "Audio",
+              ),
+            ],
+          ),
+          body: IndexedStack(
+            index: _tab,
+            children: [
+              const _ConverterTab(),
+              _opened.contains(1) ? const MediaLibraryTab(kind: MediaKind.video) : const SizedBox.shrink(),
+              _opened.contains(2) ? const MediaLibraryTab(kind: MediaKind.audio) : const SizedBox.shrink(),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+// ================= 1-BO'LIM: FAYL KONVERTORI =================
+class _ConverterTab extends StatelessWidget {
+  const _ConverterTab();
+
+  void _open(BuildContext context, Widget screen) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+  }
+
+  Future<void> _openPdfReader(BuildContext context) async {
+    try {
+      final file = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ["pdf"]);
+      final path = file?.path;
+      if (file == null || path == null || !context.mounted) return;
+      _open(context, PdfViewerScreen(pdfPath: path, fileName: file.name));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Faylni tanlab bo'lmadi: $e")),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+      children: [
+        // Profil yuklanganda yoki PRO o'zgarganda kartochka yangilanadi
+        ListenableBuilder(listenable: profile, builder: (context, _) => _statusCard(scheme)),
+        const SizedBox(height: 14),
+        _ToolRow(
+          icon: Icons.transform_rounded,
+          title: "Media konvertor",
+          subtitle: "Video, audio va rasm formatlari",
+          onTap: () => _open(context, const ConverterScreen(mode: ConverterMode.media)),
+        ),
+        _ToolRow(
+          icon: Icons.audiotrack_rounded,
+          title: "Videodan audio",
+          subtitle: "Videodan ovozni ajratib olish",
+          onTap: () => _open(context, const ConverterScreen(mode: ConverterMode.videoToAudio)),
+        ),
+        _ToolRow(
+          icon: Icons.description_rounded,
+          title: "PDF dan Word",
+          subtitle: "Word, PowerPoint, Excel (onlayn)",
+          pro: true,
+          onTap: () => _open(context, const OnlinePdfScreen()),
+        ),
+        _ToolRow(
+          icon: Icons.merge_rounded,
+          title: "PDF birlashtirish",
+          subtitle: "Bir nechta PDF ni bittaga qo'shish",
+          onTap: () => _open(context, const PdfMergeScreen()),
+        ),
+        _ToolRow(
+          icon: Icons.picture_as_pdf_rounded,
+          title: "PDF va rasm",
+          subtitle: "PDF dan rasm, rasmdan PDF",
+          onTap: () => _open(context, const ConverterScreen(mode: ConverterMode.pdfImage)),
+        ),
+        _ToolRow(
+          icon: Icons.menu_book_rounded,
+          title: "PDF o'qish",
+          subtitle: "PDF faylni ochib ko'rish",
+          onTap: () => _openPdfReader(context),
+        ),
+      ],
     );
   }
 
@@ -190,13 +235,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 }
 
-class _ToolCard extends StatelessWidget {
+/// Konvertor bo'limidagi bitta satr
+class _ToolRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
   final bool pro;
   final VoidCallback onTap;
-  const _ToolCard({
+  const _ToolRow({
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -207,60 +253,67 @@ class _ToolCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [scheme.primary, scheme.tertiary],
-                      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [scheme.primary, scheme.tertiary],
                     ),
-                    child: Icon(icon, color: scheme.onPrimary, size: 28),
                   ),
-                  const Spacer(),
-                  if (pro)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade600,
-                        borderRadius: BorderRadius.circular(10),
+                  child: Icon(icon, color: scheme.onPrimary, size: 28),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
-                      child: const Text(
-                        "PRO",
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.black),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
                       ),
+                    ],
+                  ),
+                ),
+                if (pro)
+                  Container(
+                    margin: const EdgeInsets.only(left: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade600,
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                ],
-              ),
-              const Spacer(),
-              Text(
-                title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, height: 1.15),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant, height: 1.2),
-              ),
-            ],
+                    child: const Text(
+                      "PRO",
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.black),
+                    ),
+                  ),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
+              ],
+            ),
           ),
         ),
       ),

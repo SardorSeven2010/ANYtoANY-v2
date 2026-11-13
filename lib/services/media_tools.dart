@@ -32,6 +32,15 @@ const List<VideoCodec> videoCodecs = [
   VideoCodec("Kodekni o'zgartirmasdan tez ko'chirish", "copy"),
 ];
 
+// Bepul tarifda faqat shu kodek ochiq, qolganlari PRO obunada
+const List<String> freeCodecs = ["libx264"];
+
+bool codecAllowed(String codec, {required bool pro}) => pro || freeCodecs.contains(codec);
+
+/// Bu formatga aylantirish uchun PRO kerakmi (bepul kodeklarning birortasi mos kelmasa)
+bool formatNeedsPro(String format) =>
+    videoFormats.contains(format) && !codecsFor(format).any((c) => freeCodecs.contains(c.value));
+
 /// Har bir konteyner hamma kodekni ham qabul qilmaydi (masalan WebM faqat VP9)
 List<VideoCodec> codecsFor(String format) {
   const Map<String, List<String>> allowed = {

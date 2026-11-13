@@ -168,6 +168,12 @@ ThemeData buildAppTheme(AppThemeSpec spec) {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     ),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: scheme.surface.withValues(alpha: 0.82),
+      indicatorColor: scheme.primaryContainer,
+      elevation: 0,
+      height: 68,
+    ),
     snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
   );
 }
