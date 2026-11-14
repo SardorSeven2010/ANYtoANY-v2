@@ -40,6 +40,11 @@ class OnlinePdfException implements Exception {
   String toString() => message;
 }
 
+/// Supabase'dagi funksiya "Hujjatdan PDF" qo'shilishidan oldingi versiyada qolgan bo'lsa
+const String outdatedFunctionMessage =
+    "Serverdagi konvertatsiya funksiyasi eski versiyada. Supabase → Edge Functions → "
+    "$convertFunctionName kodini yangi index.ts bilan almashtirib, Deploy tugmasini bosing.";
+
 String _messageFor(String code, [String? detail]) {
   switch (code) {
     case "unauthorized":
@@ -131,7 +136,16 @@ Future<void> convertOnline({
   };
 
   onStage?.call("Tayyorlanmoqda...");
-  final start = await call({"action": "start", ...request});
+  Map<String, dynamic> start;
+  try {
+    start = await call({"action": "start", ...request});
+  } on OnlinePdfException catch (e) {
+    // Eski funksiya faqat "PDF dan Word" ni biladi va har doim targetFormat so'raydi
+    if (operation == OnlineOperation.create && e.message.contains("targetFormat")) {
+      throw const OnlinePdfException(outdatedFunctionMessage);
+    }
+    rethrow;
+  }
 
   onStage?.call("Fayl yuklanmoqda...");
   await _upload(
