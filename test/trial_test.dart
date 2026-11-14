@@ -1,5 +1,4 @@
 import 'package:any_to_any/app_theme.dart';
-import 'package:any_to_any/config.dart';
 import 'package:any_to_any/services/device_id.dart';
 import 'package:any_to_any/services/profile_service.dart';
 import 'package:any_to_any/widgets/trial_banner.dart';
