@@ -1,73 +1,158 @@
-"""CORE logotipi va ilova belgilari (uch rangli pog'onali dizayn: CO - qizil, R - sariq, E - yashil).
+"""CORE logotipi va ilova belgilari.
+
+G'oya: "yadro". Ochiq gradient halqa (ma'lumot oqimi) va uning markazidagi o'yin (play) belgisi:
+konvertor, pleyer va yuklagich bitta yadroda. Halqaning ochiq joyida sariq nuqta: oqib ketayotgan fayl.
 
 Foydalanish: python3 tools/gen_logo.py <repo papkasi>
 Yaratadi:
-  assets/logo.png, admin_app/assets/... - ilovalar ichida (shaffof fon)
-  installer/core.png / .ico             - Linux va Windows belgisi
-  installer/icons/android/...           - Android ilova belgilari (asosiy va admin)
-  installer/icons/ios/...               - iPhone ilova belgilari
+  assets/logo.png, admin_app/assets/logo.png - ilovalar ichida (shaffof fon, belgi + CORE yozuvi)
+  installer/core.png / .ico                  - Linux va Windows belgisi
+  installer/icons/android/...                - Android ilova belgilari (asosiy va admin)
+  installer/icons/ios/...                    - iPhone ilova belgilari (shaffoflik yo'q)
 """
 import json
+import math
 import os
 import sys
 
-from PIL import Image, ImageDraw, ImageFont
+import numpy as np
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
-FONT = "/opt/flutter-sdk/flutter/bin/cache/artifacts/material_fonts/Roboto-Medium.ttf"
-FONT_BOLD = "/opt/flutter-sdk/flutter/bin/cache/artifacts/material_fonts/Roboto-Bold.ttf"
-RED = (255, 69, 57, 255)
-YELLOW = (255, 214, 10, 255)
-GREEN = (52, 200, 90, 255)
-WHITE = (255, 255, 255, 255)
-BLACK = (0, 0, 0, 255)
-K = 8  # asl rasm (367x261) koordinatalari shu barobar kattalashtiriladi
+FONTS = [
+    "/usr/share/fonts/opentype/inter/Inter-ExtraBold.otf",
+    "/opt/flutter-sdk/flutter/bin/cache/artifacts/material_fonts/Roboto-Bold.ttf",
+]
+FONT_BOLD = next(f for f in FONTS if os.path.exists(f))
+
+TEAL = (25, 230, 195)
+VIOLET = (124, 92, 255)
+YELLOW = (255, 214, 10)
+NAVY = (13, 19, 48)
+INK = (16, 22, 52)  # yozuv rangi (oq fonda)
+
+SS = 2  # chizish aniqligi (supersampling)
+
+
+def gradient(size, c0, c1, angle_deg=45.0):
+    """Diagonal chiziqli gradient (RGBA, to'liq ko'rinadigan)."""
+    w, h = size
+    a = math.radians(angle_deg)
+    ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
+    t = (xs * math.cos(a) + ys * math.sin(a)) / (w * abs(math.cos(a)) + h * abs(math.sin(a)))
+    t = np.clip(t, 0, 1)[..., None]
+    arr = np.array(c0, np.float32) * (1 - t) + np.array(c1, np.float32) * t
+    out = np.dstack([arr, np.full((h, w, 1), 255, np.float32)])
+    return Image.fromarray(out.astype(np.uint8), "RGBA")
+
+
+def mark(size=1024, with_dot=True):
+    """Belgi: gradient halqa + play + sariq nuqta. Shaffof fonda, size x size."""
+    S = size * SS
+    cx = cy = S / 2
+    outer = S * 0.43
+    thick = S * 0.125
+    gap = 40  # halqaning o'ng tomondagi ochiq joyi (har tomonga, gradus)
+
+    # --- halqa maskasi (yumaloq uchlari bilan)
+    ring = Image.new("L", (S, S), 0)
+    d = ImageDraw.Draw(ring)
+    d.arc([cx - outer, cy - outer, cx + outer, cy + outer], gap, 360 - gap, fill=255, width=int(thick))
+    rc = outer - thick / 2  # o'rta chiziq radiusi
+    for ang in (gap, 360 - gap):
+        x = cx + rc * math.cos(math.radians(ang))
+        y = cy + rc * math.sin(math.radians(ang))
+        d.ellipse([x - thick / 2, y - thick / 2, x + thick / 2, y + thick / 2], fill=255)
+
+    # --- play belgisi (yumaloq burchakli uchburchak)
+    tri = Image.new("L", (S, S), 0)
+    td = ImageDraw.Draw(tri)
+    r = S * 0.028  # burchak yumaloqligi
+    pts = [(-0.105, -0.165), (-0.105, 0.165), (0.178, 0.0)]
+    shift = S * 0.012  # optik markaz
+    poly = [(cx + shift + x * S, cy + y * S) for x, y in pts]
+    # ichkariga qisqartirib, so'ng chiziq qalinligi bilan yumaloqlaymiz (o'lcham saqlanadi)
+    gx = sum(p[0] for p in poly) / 3
+    gy = sum(p[1] for p in poly) / 3
+    inner = []
+    for px, py in poly:
+        dx, dy = px - gx, py - gy
+        dist = math.hypot(dx, dy)
+        k = (dist - r * 1.9) / dist
+        inner.append((gx + dx * k, gy + dy * k))
+    td.polygon(inner, fill=255)
+    td.line(inner + [inner[0]], fill=255, width=int(r * 2), joint="curve")
+    for x, y in inner:
+        td.ellipse([x - r, y - r, x + r, y + r], fill=255)
+
+    grad = gradient((S, S), TEAL, VIOLET, 50)
+    out = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    out.paste(grad, (0, 0), ring)
+    out.paste(gradient((S, S), TEAL, VIOLET, 50), (0, 0), tri)
+
+    if with_dot:
+        # ochiq joydagi sariq nuqta: oqib ketayotgan ma'lumot
+        dot = Image.new("L", (S, S), 0)
+        dd = ImageDraw.Draw(dot)
+        dr = thick * 0.40
+        x = cx + rc * math.cos(0)
+        dd.ellipse([x - dr, cy - dr, x + dr, cy + dr], fill=255)
+        yellow = Image.new("RGBA", (S, S), YELLOW + (255,))
+        out.paste(yellow, (0, 0), dot)
+    return out.resize((size, size), Image.LANCZOS)
 
 
 def logo():
-    """Shaffof fondagi logotip: qizil CO, sariq R, yashil E."""
-    W, H = 370 * K, 262 * K
+    """Ilova ichidagi logotip (shaffof fon): belgi va pastida CORE yozuvi. Oq fonda yaxshi ko'rinadi."""
+    m = mark(900)
+    text = "CORE"
+    font = ImageFont.truetype(FONT_BOLD, 215)
+    spacing = 30
+    widths = [font.getlength(ch) for ch in text]
+    total = int(sum(widths) + spacing * (len(text) - 1))
+    asc, desc = font.getmetrics()
+    W = max(m.width, total) + 40
+    H = m.height + asc + desc
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    img.alpha_composite(m, ((W - m.width) // 2, 0))
     d = ImageDraw.Draw(img)
-
-    def box(x0, y0, x1, y1, fill, r=13):
-        d.rounded_rectangle([x0 * K, y0 * K, x1 * K, y1 * K], radius=r * K, fill=fill)
-
-    def text(bx, s, fill, font=FONT_BOLD, fill_w=0.80, fill_h=0.64):
-        """Yozuvni qutiga (bx = x0, y0, x1, y1) sig'diradi va o'rtasiga joylaydi."""
-        x0, y0, x1, y1 = bx
-        size = 100 * K
-        f = ImageFont.truetype(font, size)
-        left, top, right, bottom = d.textbbox((0, 0), s, font=f)
-        scale = min((x1 - x0) * K * fill_w / (right - left), (y1 - y0) * K * fill_h / (bottom - top))
-        f = ImageFont.truetype(font, int(size * scale))
-        left, top, right, bottom = d.textbbox((0, 0), s, font=f)
-        cx, cy = (x0 + x1) / 2 * K, (y0 + y1) / 2 * K
-        d.text((cx - (left + right) / 2, cy - (top + bottom) / 2), s, font=f, fill=fill)
-
-    boxes = {"CO": (4, 4, 134, 84), "R": (113, 53, 207, 169), "E": (180, 141, 367, 258)}
-    box(*boxes["CO"], RED)
-    box(*boxes["R"], YELLOW)
-    box(*boxes["E"], GREEN)
-    text(boxes["CO"], "CO", WHITE)
-    text(boxes["R"], "R", BLACK, fill_w=0.62, fill_h=0.52)
-    text(boxes["E"], "E", WHITE, fill_w=0.5, fill_h=0.64)
+    x = (W - total) / 2
+    y = m.height - 10
+    for ch, w in zip(text, widths):
+        d.text((x, y), ch, font=font, fill=INK + (255,))
+        x += w + spacing
     return img.crop(img.getbbox())
 
 
-def square_icon(size, logo_img, background=(255, 255, 255, 255), fill=0.84, badge=None):
-    """Kvadrat belgi: oq fon o'rtasida logotip. badge - admin ilovasi uchun pastdagi yozuv."""
+def background(size, rounded=True):
+    """Ilova belgisi foni: to'q ko'k, yuqorida yengil nur. rounded=False: iPhone uchun (butun kvadrat)."""
+    S = size * SS
+    base = gradient((S, S), (22, 33, 82), (7, 10, 26), 80)
+    glow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gd.ellipse([S * 0.15, S * -0.25, S * 0.85, S * 0.45], fill=TEAL + (70,))
+    glow = glow.filter(ImageFilter.GaussianBlur(S * 0.12))
+    base.alpha_composite(glow)
+    if rounded:
+        mask = Image.new("L", (S, S), 0)
+        ImageDraw.Draw(mask).rounded_rectangle([0, 0, S - 1, S - 1], radius=int(S * 0.225), fill=255)
+        base.putalpha(ImageChops.multiply(base.getchannel("A"), mask))
+    return base.resize((size, size), Image.LANCZOS)
+
+
+def square_icon(size, rounded=True, badge=None, fill=0.74):
+    """Kvadrat belgi: to'q fon ustida belgi. badge - admin ilovasi uchun pastdagi yozuv."""
     S = 1024
-    canvas = Image.new("RGBA", (S, S), background)
-    lw = int(S * fill)
-    lh = int(logo_img.height * lw / logo_img.width)
-    top = (S - lh) // 2 - (60 if badge else 0)
-    canvas.alpha_composite(logo_img.resize((lw, lh), Image.LANCZOS), ((S - lw) // 2, top))
+    canvas = background(S, rounded)
+    m = mark(int(S * fill))
+    top = (S - m.height) // 2 - (70 if badge else 0)
+    canvas.alpha_composite(m, ((S - m.width) // 2, top))
     if badge:
         d = ImageDraw.Draw(canvas)
-        f = ImageFont.truetype(FONT_BOLD, 132)
-        d.rounded_rectangle([190, 812, S - 190, 972], radius=56, fill=(25, 25, 35, 255))
-        d.text((S // 2, 893), badge, font=f, fill=(255, 214, 10, 255), anchor="mm")
-    return canvas.resize((size, size), Image.LANCZOS)
+        f = ImageFont.truetype(FONT_BOLD, 120)
+        d.rounded_rectangle([210, 800, S - 210, 950], radius=75, fill=YELLOW + (255,))
+        d.text((S // 2, 876), badge, font=f, fill=NAVY + (255,), anchor="mm")
+    img = canvas.resize((size, size), Image.LANCZOS)
+    return img if rounded else img.convert("RGB")
 
 
 ANDROID = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
@@ -76,13 +161,14 @@ ANDROID = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 def main(repo):
     lg = logo()
     os.makedirs(f"{repo}/assets", exist_ok=True)
-    small = lg.resize((lg.width // 4, lg.height // 4), Image.LANCZOS)
+    scale = 900 / lg.width
+    small = lg.resize((900, int(lg.height * scale)), Image.LANCZOS)
     small.save(f"{repo}/assets/logo.png", optimize=True)
     os.makedirs(f"{repo}/admin_app/assets", exist_ok=True)
     small.save(f"{repo}/admin_app/assets/logo.png", optimize=True)
 
-    square_icon(512, lg).save(f"{repo}/installer/core.png", optimize=True)
-    square_icon(256, lg).save(
+    square_icon(512).save(f"{repo}/installer/core.png", optimize=True)
+    square_icon(256).save(
         f"{repo}/installer/core.ico",
         sizes=[(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)],
     )
@@ -91,7 +177,7 @@ def main(repo):
         for density, px in ANDROID.items():
             out = f"{repo}/installer/icons/android/{app}/mipmap-{density}"
             os.makedirs(out, exist_ok=True)
-            square_icon(px, lg, badge=badge).save(f"{out}/ic_launcher.png", optimize=True)
+            square_icon(px, badge=badge).save(f"{out}/ic_launcher.png", optimize=True)
 
     # iPhone: Flutter shablonidagi AppIcon fayl nomlari va o'lchamlari (shaffoflik bo'lmasligi kerak)
     ios_dir = f"{repo}/installer/icons/ios"
@@ -104,7 +190,7 @@ def main(repo):
             continue
         base = float(item["size"].split("x")[0])
         px = int(round(base * int(item["scale"].rstrip("x"))))
-        square_icon(px, lg).convert("RGB").save(f"{ios_dir}/{name}", optimize=True)
+        square_icon(px, rounded=False).save(f"{ios_dir}/{name}", optimize=True)
         done.add(name)
     print("ok:", len(done), "iOS belgi,", 2 * len(ANDROID), "Android belgi")
 
