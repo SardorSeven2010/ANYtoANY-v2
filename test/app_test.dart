@@ -5,6 +5,7 @@ import 'package:any_to_any/screens/converter_screen.dart';
 import 'package:any_to_any/screens/online_pdf_screen.dart';
 import 'package:any_to_any/screens/media_library.dart';
 import 'package:any_to_any/screens/pdf_merge_screen.dart';
+import 'package:any_to_any/player/engine.dart';
 import 'package:any_to_any/screens/player_screen.dart';
 import 'package:any_to_any/screens/subscription_screen.dart';
 import 'package:any_to_any/services/media_tools.dart';
@@ -548,17 +549,20 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('Linux: player opens the file in the system player', (tester) async {
+  testWidgets('Linux: if libmpv is missing the file opens in the system player', (tester) async {
     phone(tester);
     final launcher = FakeLauncher();
     UrlLauncherPlatform.instance = launcher;
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    playerEngineFactory = () => throw Exception('libmpv topilmadi');
+    addTearDown(() => playerEngineFactory = () => MediaKitEngine());
     await tester.pumpWidget(MaterialApp(
       theme: buildAppTheme(appThemes.first),
       home: const PlayerScreen(path: '/home/ali/Videos/dars.mp4', title: 'dars.mp4'),
     ));
     await settle(tester);
     expect(find.textContaining("kompyuteringizdagi pleyerda"), findsOneWidget);
+    expect(find.textContaining("libmpv"), findsOneWidget);
     expect(find.text('Tizim pleyerida ochish'), findsOneWidget);
     expect(launcher.launched, 'file:///home/ali/Videos/dars.mp4');
     launcher.launched = null;

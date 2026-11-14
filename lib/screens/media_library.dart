@@ -7,6 +7,7 @@ import 'package:photo_manager/photo_manager.dart';
 
 import '../platform.dart';
 import '../services/media_tools.dart';
+import '../player/play_queue.dart';
 import 'player_screen.dart';
 import '../widgets/glass.dart';
 
@@ -232,19 +233,29 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
     if (mounted) setState(() => _loadingMore = false);
   }
 
-  void _play(String path, String title) {
+  void _play(List<QueueItem> items, int start) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => PlayerScreen(path: path, title: title)),
+      MaterialPageRoute(builder: (_) => PlayerScreen.queue(items: items, startIndex: start)),
     );
   }
 
+  /// Ro'yxatdagi fayllar navbat bo'ladi: tanlangani birinchi, qolganlari ketma-ket (yoki aralash) o'ynaydi.
+  /// Galereya fayllarining yo'li faqat o'ynaydigan paytda aniqlanadi.
   Future<void> _open(_Entry entry) async {
     try {
-      final String? path = entry.path ?? (await entry.asset?.file)?.path;
+      final index = _items.indexOf(entry);
+      final queue = [
+        for (final e in _items)
+          QueueItem(
+            title: e.title,
+            path: e.path,
+            resolve: e.asset == null ? null : () async => (await e.asset!.file)?.path,
+          ),
+      ];
+      if (index < 0) throw Exception("fayl topilmadi");
       if (!mounted) return;
-      if (path == null) throw Exception("fayl topilmadi");
-      _play(path, entry.title);
+      _play(queue, index);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -261,7 +272,7 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
           : await FilePicker.pickFile(type: _isVideo ? FileType.video : FileType.audio);
       final path = file?.path;
       if (file == null || path == null || !mounted) return;
-      _play(path, file.name);
+      _play([QueueItem(title: file.name, path: path)], 0);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -55,10 +55,14 @@ void main() {
     expect(engine.videoHeight, anyOf(isNull, 240));
     await engine.pause();
     await until(() => !engine.playing);
-    await Future<void>.delayed(const Duration(milliseconds: 300)); // so'nggi kadr yetib kelsin
-    final at = engine.position;
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    expect(engine.position, at, reason: 'paused: position stands still');
+    // pauzadan keyin joy o'zgarmay qolishini kutamiz (so'nggi kadr yetib kelishi mumkin)
+    var stable = false;
+    for (var i = 0; i < 20 && !stable; i++) {
+      final before = engine.position;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      stable = engine.position == before;
+    }
+    expect(stable, isTrue, reason: 'paused: position stands still');
     await engine.play();
     await until(() => engine.playing);
   });

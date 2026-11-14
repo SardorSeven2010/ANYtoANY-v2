@@ -19,9 +19,6 @@ dependencies:
   path_provider: ^2.1.6
   pdfx: ^2.11.0
   pdf: ^3.13.1
-  video_player: ^2.14.1
-  video_player_win: ^3.3.1
-  wakelock_plus: ^1.8.2
   url_launcher: ^6.3.3
   photo_manager: ^3.12.0
   pdf_combiner: ^6.3.0

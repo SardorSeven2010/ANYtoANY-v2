@@ -1,12 +1,12 @@
 import 'dart:math';
 
 /// Takrorlash rejimi: o'chiq (ro'yxat oxirida to'xtaydi), ro'yxatni takrorlash, bitta faylni takrorlash
-enum RepeatMode { off, all, one }
+enum QueueRepeat { off, all, one }
 
-RepeatMode nextRepeatMode(RepeatMode mode) => switch (mode) {
-      RepeatMode.off => RepeatMode.all,
-      RepeatMode.all => RepeatMode.one,
-      RepeatMode.one => RepeatMode.off,
+QueueRepeat nextQueueRepeat(QueueRepeat mode) => switch (mode) {
+      QueueRepeat.off => QueueRepeat.all,
+      QueueRepeat.all => QueueRepeat.one,
+      QueueRepeat.one => QueueRepeat.off,
     };
 
 /// Navbatdagi bitta fayl. Yo'l darhol ma'lum bo'lmasligi mumkin (galereya fayllari uchun [resolve]).
@@ -39,7 +39,7 @@ class PlayQueue {
   late int _pos;
   bool _shuffle = false;
 
-  RepeatMode repeat = RepeatMode.off;
+  QueueRepeat repeat = QueueRepeat.off;
 
   List<QueueItem> get items => List.unmodifiable(_items);
   int get length => _items.length;
@@ -78,13 +78,13 @@ class PlayQueue {
   /// Keyingi faylga o'tadi. [auto] true bo'lsa fayl o'zi tugagan (shunda "bittasini takrorlash" amal qiladi).
   /// Qaytaradi: hozirgi fayl (yoki yangisi) ijro etilsin (true) yoki ro'yxat tugadi (false).
   bool next({bool auto = false}) {
-    if (auto && repeat == RepeatMode.one) return true;
+    if (auto && repeat == QueueRepeat.one) return true;
     if (_pos + 1 < _order.length) {
       _pos++;
       return true;
     }
-    if (repeat == RepeatMode.all || (!auto && repeat == RepeatMode.one)) {
-      if (_order.length == 1) return repeat == RepeatMode.all;
+    if (repeat == QueueRepeat.all || (!auto && repeat == QueueRepeat.one)) {
+      if (_order.length == 1) return repeat == QueueRepeat.all;
       if (_shuffle) {
         final last = index;
         _order = _shuffledOrder(first: _randomOther(last), notFirst: last);
@@ -108,7 +108,7 @@ class PlayQueue {
       _pos--;
       return true;
     }
-    if (repeat != RepeatMode.off && _order.length > 1) {
+    if (repeat != QueueRepeat.off && _order.length > 1) {
       _pos = _order.length - 1;
       return true;
     }
@@ -125,7 +125,7 @@ class PlayQueue {
   /// Keyingi ijro etiladigan fayl (ko'rsatish uchun); yo'q bo'lsa null
   QueueItem? get upNext {
     if (_pos + 1 < _order.length) return _items[_order[_pos + 1]];
-    if (repeat == RepeatMode.all && _order.length > 1) return _items[_order.first];
+    if (repeat == QueueRepeat.all && _order.length > 1) return _items[_order.first];
     return null;
   }
 }

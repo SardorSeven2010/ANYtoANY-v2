@@ -76,3 +76,11 @@ class BackgroundCoordinator {
     _running = await _bridge.showForeground(kind: kind, title: title, text: text, progress: progress, playing: playing);
   }
 }
+
+BackgroundCoordinator? _service;
+
+/// Butun ilova uchun yagona fon xizmati boshqaruvchisi (pleyer va yuklashlar shuni ishlatadi)
+BackgroundCoordinator get backgroundService => _service ??= BackgroundCoordinator(nativeBridge);
+
+/// Testlar uchun almashtirish (null: standart holat)
+void setBackgroundService(BackgroundCoordinator? value) => _service = value;

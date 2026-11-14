@@ -37,7 +37,7 @@ void main() {
 
   group('repeat', () {
     test('repeat all wraps around in both directions', () {
-      final q = PlayQueue(items(3), start: 2)..repeat = RepeatMode.all;
+      final q = PlayQueue(items(3), start: 2)..repeat = QueueRepeat.all;
       expect(q.next(auto: true), isTrue);
       expect(q.index, 0);
       expect(q.previous(), isTrue);
@@ -46,7 +46,7 @@ void main() {
     });
 
     test('repeat one replays the same file when it ends, but next still moves on', () {
-      final q = PlayQueue(items(3), start: 1)..repeat = RepeatMode.one;
+      final q = PlayQueue(items(3), start: 1)..repeat = QueueRepeat.one;
       expect(q.next(auto: true), isTrue);
       expect(q.index, 1, reason: 'same file again');
       expect(q.next(), isTrue);
@@ -58,15 +58,15 @@ void main() {
     test('a single file: repeat all keeps playing it, off stops', () {
       final q = PlayQueue(items(1));
       expect(q.next(auto: true), isFalse);
-      q.repeat = RepeatMode.all;
+      q.repeat = QueueRepeat.all;
       expect(q.next(auto: true), isTrue);
       expect(q.index, 0);
     });
 
     test('repeat button cycles off -> all -> one -> off', () {
-      expect(nextRepeatMode(RepeatMode.off), RepeatMode.all);
-      expect(nextRepeatMode(RepeatMode.all), RepeatMode.one);
-      expect(nextRepeatMode(RepeatMode.one), RepeatMode.off);
+      expect(nextQueueRepeat(QueueRepeat.off), QueueRepeat.all);
+      expect(nextQueueRepeat(QueueRepeat.all), QueueRepeat.one);
+      expect(nextQueueRepeat(QueueRepeat.one), QueueRepeat.off);
     });
   });
 
@@ -109,7 +109,7 @@ void main() {
     test('shuffle + repeat all reshuffles on wrap and the first file differs from the last played', () {
       final q = PlayQueue(items(6), random: Random(5))
         ..shuffle = true
-        ..repeat = RepeatMode.all;
+        ..repeat = QueueRepeat.all;
       for (var round = 0; round < 20; round++) {
         final seen = <int>{q.index};
         var last = q.index;
