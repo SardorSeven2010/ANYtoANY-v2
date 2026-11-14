@@ -168,9 +168,29 @@ List<String> buildFfmpegArgs({
   return args;
 }
 
+/// Linux'da kompyuterga FFmpeg o'rnatilmagan bo'lsa
+class FfmpegMissingException implements Exception {
+  const FfmpegMissingException();
+
+  @override
+  String toString() => "Kompyuterda FFmpeg o'rnatilmagan. Terminalda bajaring: sudo apt install ffmpeg";
+}
+
 Future<bool> runFfmpeg(List<String> args) async {
+  // Linux uchun FFmpegKit kutubxonalari faqat eski distributivlarga mos keladi,
+  // shuning uchun Linux'da tizimning o'z ffmpeg dasturi ishlatiladi (.deb uni o'zi o'rnatadi)
+  if (isLinuxApp) return _runSystemFfmpeg(args);
   final session = await FFmpegKit.executeWithArguments(args);
   return ReturnCode.isSuccess(await session.getReturnCode());
+}
+
+Future<bool> _runSystemFfmpeg(List<String> args) async {
+  try {
+    final result = await Process.run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-nostdin", ...args]);
+    return result.exitCode == 0;
+  } on ProcessException {
+    throw const FfmpegMissingException();
+  }
 }
 
 Future<void> deleteQuietly(String path) async {

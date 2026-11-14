@@ -16,6 +16,12 @@ EXE="$BUNDLE/anytoany"
 [ -x "$EXE" ] || { echo "Topilmadi: $EXE"; exit 1; }
 [ -f "$PDFIUM" ] || { echo "Topilmadi: $PDFIUM"; exit 1; }
 
+# Linux'da tizimning ffmpeg dasturi ishlatiladi: FFmpegKit kutubxonalari eski distributivlarning
+# kodek kutubxonalariga (libvpx.so.7, libx265.so.199 ...) bog'liq va yangi tizimlarda yuklanmaydi.
+rm -f "$LIB"/libffmpegkit.so* "$LIB"/libavcodec.so* "$LIB"/libavdevice.so* "$LIB"/libavfilter.so* \
+  "$LIB"/libavformat.so* "$LIB"/libavutil.so* "$LIB"/libswresample.so* "$LIB"/libswscale.so*
+echo "FFmpegKit kutubxonalari olib tashlandi (Linux'da tizim ffmpeg'i ishlatiladi)"
+
 if [ ! -f "$LIB/libpdfium.so" ]; then
   cp "$PDFIUM" "$LIB/libpdfium.so"
   echo "libpdfium.so bundle/lib ga qo'shildi"

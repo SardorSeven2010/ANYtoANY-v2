@@ -27,7 +27,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: ANYtoANY <noreply@anytoany.invalid>
 Installed-Size: $SIZE_KB
-Depends: libgtk-3-0t64 | libgtk-3-0, libjson-glib-1.0-0, xdg-utils
+Depends: libgtk-3-0t64 | libgtk-3-0, libjson-glib-1.0-0, ffmpeg, xdg-utils
 Description: ANYtoANY - video, audio va PDF konverter
  Video, audio va rasmlarni boshqa formatlarga aylantiradi, PDF fayllarni
  birlashtiradi va o'qiydi. Internetsiz ishlaydi; PDF va Word konvertatsiyasi
