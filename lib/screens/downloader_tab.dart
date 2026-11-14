@@ -11,6 +11,15 @@ import 'download_sheets.dart';
 import 'subscription_screen.dart';
 import 'viewers.dart';
 
+/// Saqlangan joy: "Download/CORE" yoki papka nomi (foydalanuvchi faylni qayerdan topishini bilsin)
+String savedWhere(String path) {
+  final parts = path.split(RegExp(r'[/\\]')).where((p) => p.isNotEmpty).toList();
+  if (parts.length < 3) return path;
+  final dir = parts.sublist(0, parts.length - 1);
+  final tail = dir.length >= 2 ? "${dir[dir.length - 2]}/${dir.last}" : dir.last;
+  return tail;
+}
+
 /// Brauzer (WebView) faqat telefonda ishlaydi
 bool get browserAvailable => isAndroidApp || isIOSApp;
 
@@ -270,7 +279,11 @@ class _JobCard extends StatelessWidget {
                   parts,
                 ].where((s) => s.isNotEmpty).join(" • ");
         } else if (done) {
-          detail = "Tayyor${job.outputBytes != null ? " • ${formatBytes(job.outputBytes)}" : ""}";
+          detail = [
+            "Tayyor",
+            if (job.outputBytes != null) formatBytes(job.outputBytes),
+            if (job.outputPath != null) savedWhere(job.outputPath!),
+          ].join(" • ");
         } else if (job.status == JobStatus.failed) {
           detail = job.error ?? "Xato";
         } else {

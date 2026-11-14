@@ -41,7 +41,12 @@ jobs:
       - name: Kutubxonalarni o'rnatish
         run: flutter pub get
 
+      - name: Sahifa detektori testi uchun jsdom o'rnatish
+        run: npm install --prefix "$RUNNER_TEMP/jsdomlib" jsdom@24 --no-audit --no-fund
+
       - name: Testlar
+        env:
+          NODE_PATH: ${{ runner.temp }}/jsdomlib/node_modules
         run: flutter test --exclude-tags "ffmpeg || mpv"
 
       - name: Release APK yig'ish (protsessor turi bo'yicha alohida, kichikroq hajm)
@@ -254,6 +259,12 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :LSSupportsOpeningDocumentsInPlace bool true" "$PL"
           /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes array" "$PL"
           /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes:0 string tel" "$PL"
+          # Fonda musiqa/video ovozi, skrinshotni galereyaga saqlash, brauzerdagi HTTP sahifalar
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string audio" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryAddUsageDescription string Skrinshotlarni galereyaga saqlash uchun kerak." "$PL"
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoadsInWebView bool true" "$PL"
           plutil -lint "$PL"
           # Ilova belgisi (tools/gen_logo.py bilan yaratilgan)
           cp installer/icons/ios/*.png ios/Runner/Assets.xcassets/AppIcon.appiconset/

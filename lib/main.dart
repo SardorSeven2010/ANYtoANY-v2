@@ -5,6 +5,7 @@ import 'app_theme.dart';
 import 'config.dart';
 import 'screens/auth_screen.dart';
 import 'screens/style_screen.dart';
+import 'services/app_name.dart';
 
 // Sozlamalar (Supabase, karta raqami, narxlar, telefon) lib/config.dart faylida.
 
@@ -45,10 +46,10 @@ class _CoreAppState extends State<CoreApp> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: themeController,
+      listenable: Listenable.merge([themeController, appNameService]),
       builder: (context, _) => MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: appName,
+        title: appNameService.displayName,
         theme: buildAppTheme(themeController.current, style: themeController.style),
         home: _home,
       ),

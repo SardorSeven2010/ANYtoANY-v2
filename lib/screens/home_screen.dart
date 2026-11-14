@@ -1,9 +1,12 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_theme.dart';
-import '../config.dart';
+import '../services/app_name.dart';
+import '../services/native_bridge.dart';
 import '../services/profile_service.dart';
+import '../services/reminders.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/trial_banner.dart';
 import 'converter_screen.dart';
@@ -25,7 +28,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
-  static const List<String> _titles = [appName, "Video fayllar", "Audio fayllar", "Video yuklash"];
+  static const List<String> _titles = ["", "Video fayllar", "Audio fayllar", "Video yuklash"];
 
   int _tab = 0;
   // Bo'lim birinchi marta ochilgandagina yuklanadi
@@ -37,6 +40,45 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     profile.load();
     profile.startTimer();
+    appNameService.load();
+    profile.addListener(_syncReminders);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _askNotificationPermission());
+  }
+
+  String? _remindedFor;
+
+  /// Obuna muddati o'zgarganda tugash eslatmalarini qayta qo'yadi
+  void _syncReminders() {
+    final key = "${profile.isPro}|${profile.proUntil?.toIso8601String()}";
+    if (key == _remindedFor) return;
+    _remindedFor = key;
+    syncReminders(profile, nativeBridge);
+  }
+
+  /// Android 13+: bildirishnoma ruxsatini bir marta, sababini tushuntirib so'raydi
+  Future<void> _askNotificationPermission() async {
+    if (!nativeBridge.supported) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('notifications_asked') == true) return;
+      await prefs.setBool('notifications_asked', true);
+      if (await nativeBridge.notificationsEnabled()) return;
+      if (!mounted) return;
+      final ask = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text("Bildirishnomalar"),
+          content: const Text(
+            "Yuklash tugaganda, fonda musiqa o'ynayotganda va obuna muddati tugashidan oldin xabar yuborish uchun ruxsat bering.",
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text("Keyinroq")),
+            FilledButton(key: const Key("allowNotifications"), onPressed: () => Navigator.pop(dialogContext, true), child: const Text("Ruxsat berish")),
+          ],
+        ),
+      );
+      if (ask == true) await nativeBridge.requestNotificationPermission();
+    } catch (_) {}
   }
 
   @override
@@ -50,6 +92,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    profile.removeListener(_syncReminders);
     WidgetsBinding.instance.removeObserver(this);
     profile.stopTimer();
     super.dispose();
@@ -62,13 +105,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: profile,
+      listenable: Listenable.merge([profile, appNameService]),
       builder: (context, _) {
         final scheme = Theme.of(context).colorScheme;
         return AppScaffold(
           drawer: const AppDrawer(),
           appBar: AppBar(
-            title: Text(_titles[_tab], style: const TextStyle(fontWeight: FontWeight.w800)),
+            title: Text(_tab == 0 ? appNameService.displayName : _titles[_tab], style: const TextStyle(fontWeight: FontWeight.w800)),
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 10),

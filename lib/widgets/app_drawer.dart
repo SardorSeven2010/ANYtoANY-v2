@@ -8,6 +8,7 @@ import '../screens/admin_screen.dart';
 import '../screens/auth_screen.dart';
 import '../screens/subscription_screen.dart';
 import '../screens/theme_screen.dart';
+import '../services/app_name.dart';
 import '../services/profile_service.dart';
 
 // ================= CHAP MENYU (3 TA CHIZIQ) =================
@@ -35,6 +36,67 @@ class AppDrawer extends StatelessWidget {
     }
   }
 
+  /// PRO: ilova nomini o'zgartirish
+  Future<void> _rename(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    if (!profile.proActive) {
+      navigator.pop();
+      messenger.showSnackBar(SnackBar(
+        content: const Text("Ilova nomini o'zgartirish faqat PRO obunachilar uchun"),
+        action: SnackBarAction(
+          label: "PRO olish",
+          onPressed: () => navigator.push(MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
+        ),
+      ));
+      return;
+    }
+    final controller = TextEditingController(text: appNameService.displayName);
+    final String? entered = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Ilova nomi"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              key: const Key("appNameField"),
+              controller: controller,
+              maxLength: AppNameService.maxLength,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: "Yangi nom"),
+            ),
+            const Text(
+              "Nom ilova ichida o'zgaradi. Android'da asosiy ekranga yangi nomli yorliq qo'shish so'raladi: "
+              "ilovaning asl belgisi nomini tizim o'zgartirishga ruxsat bermaydi.",
+              style: TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text("Bekor qilish")),
+          TextButton(
+            key: const Key("appNameReset"),
+            onPressed: () => Navigator.pop(dialogContext, appName),
+            child: const Text("Asl nom"),
+          ),
+          FilledButton(key: const Key("appNameSave"), onPressed: () => Navigator.pop(dialogContext, controller.text), child: const Text("Saqlash")),
+        ],
+      ),
+    );
+    if (entered == null) return;
+    final result = await appNameService.rename(entered);
+    navigator.pop();
+    messenger.showSnackBar(SnackBar(
+      content: Text(result.ok
+          ? (result.shortcutRequested
+              ? "Nom o'zgardi. Asosiy ekranga yorliq qo'shishni tasdiqlang."
+              : "Nom o'zgardi: ${appNameService.displayName}")
+          : (result.problem ?? "Nomni o'zgartirib bo'lmadi")),
+    ));
+  }
+
   Future<void> _signOut(BuildContext context) async {
     final navigator = Navigator.of(context);
     final bool? confirmed = await showDialog<bool>(
@@ -60,7 +122,7 @@ class AppDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Drawer(
       child: ListenableBuilder(
-        listenable: Listenable.merge([profile, themeController]),
+        listenable: Listenable.merge([profile, themeController, appNameService]),
         builder: (context, _) {
           final scheme = Theme.of(context).colorScheme;
           return Column(
@@ -81,6 +143,14 @@ class AppDrawer extends StatelessWidget {
                       title: const Text("PRO obuna"),
                       subtitle: Text(profile.proLabel),
                       onTap: () => _open(context, const SubscriptionScreen()),
+                    ),
+                    ListTile(
+                      key: const Key("renameApp"),
+                      leading: const Icon(Icons.drive_file_rename_outline_rounded),
+                      title: const Text("Ilova nomini o'zgartirish"),
+                      subtitle: Text(profile.proActive ? appNameService.displayName : "Faqat PRO obunachilar uchun"),
+                      trailing: profile.proActive ? null : const Icon(Icons.lock_outline_rounded, size: 18),
+                      onTap: () => _rename(context),
                     ),
                     ListTile(
                       leading: const Icon(Icons.support_agent_rounded),
