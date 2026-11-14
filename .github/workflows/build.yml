@@ -193,7 +193,12 @@ jobs:
             echo "Ilova 25 soniya ichida yopildi (chiqish kodi $code)"
             exit 1
           fi
-          echo "Ilova ishga tushdi va 25 soniya ishlab turdi"
+          # FFmpeg va boshqa kutubxonalar keyinroq (dlopen bilan) yuklanadi: ular ham yuklanishi shart
+          if grep -Ei "dlopen|cannot open shared object" "$RUNNER_TEMP/run.log"; then
+            echo "Kutubxona yuklanmadi - yuqoridagi xatoni qarang"
+            exit 1
+          fi
+          echo "Ilova ishga tushdi, kutubxonalar yuklandi va 25 soniya ishlab turdi"
 
       - name: .deb va .tar.gz paketlarini yaratish
         run: |

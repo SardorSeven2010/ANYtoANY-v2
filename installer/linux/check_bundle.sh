@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Linux bundle'ni tekshiradi va tuzatadi:
 #  - pdf_combiner o'zining libpdfium.so faylini bundle'ga qo'shmaydi -> qo'lda qo'shiladi
-#  - plagin kutubxonalari bog'liqliklarini o'z papkasidan ($ORIGIN) qidiradigan qilinadi
-#  - ishga tushirish fayli va plaginlarning hamma bog'liqliklari topilishi tekshiriladi
+#  - bundle/lib dagi kutubxonalar (plaginlar, FFmpeg, PDFium) bog'liqliklarini o'z papkasidan
+#    ($ORIGIN) qidiradigan qilinadi. Aks holda FFmpeg dlopen paytida libavdevice va boshqalarni
+#    topa olmaydi va konvertatsiya ishlamaydi.
+#  - ishga tushirish fayli va hamma kutubxonalarning bog'liqliklari topilishi tekshiriladi
 # Foydalanish: check_bundle.sh <bundle papkasi> <libpdfium.so manzili>
 set -euo pipefail
 
@@ -19,13 +21,25 @@ if [ ! -f "$LIB/libpdfium.so" ]; then
   echo "libpdfium.so bundle/lib ga qo'shildi"
 fi
 
-for plugin in "$LIB"/*_plugin.so; do
-  patchelf --set-rpath '$ORIGIN' "$plugin"
+# Tekshiriladigan va tuzatiladigan kutubxonalar: haqiqiy fayllar (symlink emas).
+# libapp.so (Dart kodi) va libflutter_linux_gtk.so ga tegilmaydi.
+libs=()
+for file in "$LIB"/*.so "$LIB"/*.so.*; do
+  [ -e "$file" ] || continue
+  [ -L "$file" ] && continue
+  case "$(basename "$file")" in
+    libapp.so|libflutter_linux_gtk.so) continue ;;
+  esac
+  libs+=("$file")
 done
-echo "Plaginlar RUNPATH: \$ORIGIN"
+
+for file in "${libs[@]}"; do
+  patchelf --set-rpath '$ORIGIN' "$file"
+done
+echo "RUNPATH=\$ORIGIN qo'yildi: ${#libs[@]} ta kutubxona"
 
 missing=0
-for file in "$EXE" "$LIB"/*_plugin.so "$LIB/libpdfium.so"; do
+for file in "$EXE" "${libs[@]}"; do
   if ldd "$file" | grep -q "not found"; then
     echo "XATO: $(basename "$file") uchun topilmagan kutubxonalar:"
     ldd "$file" | grep "not found"
@@ -33,5 +47,9 @@ for file in "$EXE" "$LIB"/*_plugin.so "$LIB/libpdfium.so"; do
   fi
 done
 [ "$missing" -eq 0 ] || exit 1
-echo "Hamma kutubxonalar topildi:"
+
+echo "Hamma kutubxonalar topildi. Bundle ichidagilar:"
 ls -1 "$LIB"
+echo "Tizimdan olinadigan kutubxonalar:"
+for file in "$EXE" "${libs[@]}"; do ldd "$file"; done \
+  | awk '/=> \// {print $3}' | grep -v "^$(cd "$LIB" && pwd)/" | xargs -r -n1 basename | sort -u
