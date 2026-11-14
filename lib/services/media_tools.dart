@@ -184,9 +184,13 @@ Future<bool> runFfmpeg(List<String> args) async {
   return ReturnCode.isSuccess(await session.getReturnCode());
 }
 
+/// Oxirgi muvaffaqiyatsiz ffmpeg chaqiruvining xabari (xatoni aniqlash va testlar uchun)
+String lastFfmpegError = "";
+
 Future<bool> _runSystemFfmpeg(List<String> args) async {
   try {
     final result = await Process.run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-nostdin", ...args]);
+    lastFfmpegError = result.exitCode == 0 ? "" : "${result.stderr}".trim();
     return result.exitCode == 0;
   } on ProcessException {
     throw const FfmpegMissingException();

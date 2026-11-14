@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:any_to_any/downloader/common.dart';
 import 'package:any_to_any/downloader/job_runner.dart';
+import 'package:any_to_any/services/media_tools.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -55,6 +56,8 @@ void main() {
   }
 
   setUpAll(() async {
+    final v = await Process.run('ffmpeg', ['-version']);
+    printOnFailure((v.stdout as String).split('\n').first);
     src = await Directory.systemTemp.createTemp('a2a_job_src');
     const gop = ['-g', '25', '-keyint_min', '25', '-sc_threshold', '0'];
     // 3 MB atrofidagi mp4: bo'laklab yuklashni sinash uchun
@@ -107,6 +110,7 @@ void main() {
   });
 
   tearDown(() async {
+    printOnFailure('oxirgi ffmpeg xatosi: $lastFfmpegError');
     debugDefaultTargetPlatformOverride = null;
     await server.close();
     await out.delete(recursive: true);

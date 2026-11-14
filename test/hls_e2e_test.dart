@@ -41,6 +41,8 @@ void main() {
   }
 
   setUpAll(() async {
+    final v = await Process.run('ffmpeg', ['-version']);
+    printOnFailure((v.stdout as String).split('\n').first);
     src = await Directory.systemTemp.createTemp('a2a_hls_src');
     // 4 soniyalik video, har soniyada kalit kadr (bo'laklar uchun)
     await ff([
@@ -85,6 +87,7 @@ void main() {
   });
 
   tearDown(() async {
+    printOnFailure('oxirgi ffmpeg xatosi: $lastFfmpegError');
     debugDefaultTargetPlatformOverride = null;
     await server.close();
     await work.delete(recursive: true);
@@ -108,7 +111,7 @@ void main() {
     expect(server.peakConcurrent, greaterThan(1), reason: 'parts are fetched in parallel');
 
     final out = '${work.path}/out.mp4';
-    expect(await runFfmpeg(hlsMuxArgs(videoPlaylist: playlist.path, outPath: out)), isTrue);
+    expect(await runFfmpeg(hlsMuxArgs(videoPlaylist: playlist.path, outPath: out)), isTrue, reason: lastFfmpegError);
     final info = await probe(out);
     final streams = (info['streams'] as List).cast<Map<String, dynamic>>();
     expect(streams.map((s) => s['codec_name']), containsAll(['h264', 'aac']));
@@ -125,7 +128,7 @@ void main() {
     expect(File('${work.path}/hls/index_key0.bin').existsSync(), isTrue);
 
     final out = '${work.path}/out.mp4';
-    expect(await runFfmpeg(hlsMuxArgs(videoPlaylist: playlist.path, outPath: out)), isTrue);
+    expect(await runFfmpeg(hlsMuxArgs(videoPlaylist: playlist.path, outPath: out)), isTrue, reason: lastFfmpegError);
     final info = await probe(out);
     expect(double.parse(info['format']['duration'] as String), closeTo(4.0, 0.6));
     // to'liq dekodlanadi (shifr to'g'ri ochilgan)
@@ -145,7 +148,7 @@ void main() {
     final video = await downloadHlsMedia(parseHls(vt, vu) as HlsMedia, Directory('${work.path}/hls'), name: 'video');
     final audio = await downloadHlsMedia(parseHls(at, au) as HlsMedia, Directory('${work.path}/hls'), name: 'audio');
     final out = '${work.path}/out.mp4';
-    expect(await runFfmpeg(hlsMuxArgs(videoPlaylist: video.path, audioPlaylist: audio.path, outPath: out)), isTrue);
+    expect(await runFfmpeg(hlsMuxArgs(videoPlaylist: video.path, audioPlaylist: audio.path, outPath: out)), isTrue, reason: lastFfmpegError);
     final streams = ((await probe(out))['streams'] as List).cast<Map<String, dynamic>>();
     expect(streams.map((s) => s['codec_type']), containsAll(['video', 'audio']));
   });
