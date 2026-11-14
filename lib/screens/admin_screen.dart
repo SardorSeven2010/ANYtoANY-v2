@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../app_theme.dart';
 import '../config.dart';
 import '../services/profile_service.dart';
+import '../widgets/glass.dart';
 
 // ================= ADMIN PANEL (PUL TASHLAGANLARGA PRO YOQISH) =================
 // Bu oyna faqat Supabase'da is_admin = true qilingan akkauntga ko'rinadi.
@@ -106,7 +107,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     final requestedPlan = planById(user['payment_plan'] as String?);
     final int minutes = ((user['total_seconds'] as num?)?.toInt() ?? 0) ~/ 60;
 
-    return Card(
+    return AppCard(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(

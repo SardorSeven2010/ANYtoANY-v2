@@ -8,6 +8,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../app_theme.dart';
 import '../platform.dart';
 import '../services/media_tools.dart';
+import '../widgets/glass.dart';
 
 // ================= VIDEO VA AUDIO PLEYER =================
 class PlayerScreen extends StatefulWidget {
@@ -224,7 +225,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final double positionMs = (_dragMs ?? value.position.inMilliseconds.toDouble()).clamp(0.0, totalMs);
     final scheme = Theme.of(context).colorScheme;
 
-    return Card(
+    return AppCard(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),

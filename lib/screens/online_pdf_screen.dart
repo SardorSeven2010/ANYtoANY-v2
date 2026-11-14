@@ -7,6 +7,7 @@ import '../services/online_pdf.dart';
 import '../services/profile_service.dart';
 import 'subscription_screen.dart';
 import 'viewers.dart';
+import '../widgets/glass.dart';
 
 /// Onlayn konvertatsiya yo'nalishi
 enum OnlineMode {
@@ -143,7 +144,7 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
   List<Widget> _locked(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return [
-      Card(
+      AppCard(
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -181,7 +182,7 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
   List<Widget> _converter(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return [
-      Card(
+      AppCard(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -253,7 +254,7 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
       ),
       if (_results.isNotEmpty) ...[
         const SizedBox(height: 16),
-        Card(
+        AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

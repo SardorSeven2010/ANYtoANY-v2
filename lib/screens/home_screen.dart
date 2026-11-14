@@ -12,6 +12,7 @@ import 'online_pdf_screen.dart';
 import 'pdf_merge_screen.dart';
 import 'subscription_screen.dart';
 import 'viewers.dart';
+import '../widgets/glass.dart';
 
 // ================= ASOSIY OYNA =================
 // Pastda 3 ta bo'lim: fayl konvertori, video fayllar, audio fayllar.
@@ -81,9 +82,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
-          bottomNavigationBar: NavigationBar(
+          bottomNavigationBar: AppNavBar(
             selectedIndex: _tab,
-            onDestinationSelected: (i) => setState(() {
+            onSelected: (i) => setState(() {
               _tab = i;
               _opened.add(i);
             }),
@@ -214,7 +215,7 @@ class _ConverterTab extends StatelessWidget {
   }
 
   Widget _statusCard(ColorScheme scheme) {
-    return Card(
+    return AppCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -279,7 +280,7 @@ class _ToolRow extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Card(
+      child: AppCard(
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,

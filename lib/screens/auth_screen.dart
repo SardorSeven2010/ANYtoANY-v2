@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config.dart';
-import 'home_screen.dart';
+import 'style_screen.dart';
 
 // ================= KIRISH VA RO'YXATDAN O'TISH OYNASI (EMAIL OTP) =================
 class AuthScreen extends StatefulWidget {
@@ -85,7 +85,7 @@ class _AuthScreenState extends State<AuthScreen> {
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            MaterialPageRoute(builder: (_) => postLoginScreen()),
           );
         }
         return;

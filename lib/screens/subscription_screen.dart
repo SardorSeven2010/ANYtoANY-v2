@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../app_theme.dart';
 import '../config.dart';
 import '../services/profile_service.dart';
+import '../widgets/glass.dart';
 
 // ================= PRO OBUNA =================
 class SubscriptionScreen extends StatefulWidget {
@@ -75,7 +76,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             children: [
               _statusCard(scheme),
               const SizedBox(height: 14),
-              Card(
+              AppCard(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -115,7 +116,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   Widget _statusCard(ColorScheme scheme) {
     final bool active = profile.proActive;
     final plan = planById(profile.paymentPlan);
-    return Card(
+    return AppCard(
       child: ListTile(
         leading: Icon(
           Icons.workspace_premium_rounded,
@@ -149,7 +150,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   Widget _planCard(ProPlan plan, ColorScheme scheme) {
     final bool selected = plan.id == _plan.id;
-    return Card(
+    return AppCard(
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
@@ -176,7 +177,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 
   Widget _paymentCard(ColorScheme scheme) {
-    return Card(
+    return AppCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

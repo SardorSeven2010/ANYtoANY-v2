@@ -105,19 +105,64 @@ const List<AppThemeSpec> appThemes = [
   ),
 ];
 
-/// Tanlangan mavzuni saqlaydi va o'zgarganda ilovani qayta chizadi.
+/// Ko'rinish uslubi: oddiy Android (Material) yoki Liquid Glass (shisha).
+enum UiStyle { material, glass }
+
+/// Joriy uslubni ThemeData ichida olib yuradi: shunda uni o'qigan vidjetlar
+/// uslub almashganda (const bo'lsa ham) o'zi qayta chiziladi.
+class UiStyleExtension extends ThemeExtension<UiStyleExtension> {
+  final UiStyle style;
+  const UiStyleExtension(this.style);
+
+  @override
+  UiStyleExtension copyWith({UiStyle? style}) => UiStyleExtension(style ?? this.style);
+
+  @override
+  UiStyleExtension lerp(ThemeExtension<UiStyleExtension>? other, double t) =>
+      other is UiStyleExtension && t >= 0.5 ? other : this;
+}
+
+/// Berilgan kontekstdagi ko'rinish uslubi
+UiStyle uiStyleOf(BuildContext context) => Theme.of(context).extension<UiStyleExtension>()?.style ?? UiStyle.material;
+
+/// Tanlangan mavzu va uslubni saqlaydi, o'zgarganda ilovani qayta chizadi.
 class ThemeController extends ChangeNotifier {
   static const String _prefKey = "theme_id";
+  static const String _styleKey = "ui_style";
 
   AppThemeSpec _current = appThemes.first;
   AppThemeSpec get current => _current;
+
+  UiStyle _style = UiStyle.material;
+  UiStyle get style => _style;
+
+  // Saqlangan sozlamalar o'qilmaguncha so'ralmaydi (testlar va yuklanish paytida)
+  bool _styleChosen = true;
+
+  /// Foydalanuvchi uslubni hali tanlamagan bo'lsa true (kirgandan keyin tanlash oynasi chiqadi)
+  bool get needsStyleChoice => !_styleChosen;
 
   Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final id = prefs.getString(_prefKey);
       _current = appThemes.firstWhere((t) => t.id == id, orElse: () => appThemes.first);
+      final styleName = prefs.getString(_styleKey);
+      _styleChosen = styleName != null;
+      _style = styleName == UiStyle.glass.name ? UiStyle.glass : UiStyle.material;
       notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> selectStyle(UiStyle style) async {
+    _styleChosen = true;
+    if (style != _style) {
+      _style = style;
+    }
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_styleKey, style.name);
     } catch (_) {}
   }
 
@@ -134,11 +179,13 @@ class ThemeController extends ChangeNotifier {
 
 final ThemeController themeController = ThemeController();
 
-ThemeData buildAppTheme(AppThemeSpec spec) {
+ThemeData buildAppTheme(AppThemeSpec spec, {UiStyle style = UiStyle.material}) {
   final scheme = ColorScheme.fromSeed(seedColor: spec.seed, brightness: spec.brightness);
+  if (style == UiStyle.glass) return _buildGlassTheme(scheme);
   final glass = scheme.surface.withValues(alpha: 0.72);
   return ThemeData(
     useMaterial3: true,
+    extensions: const [UiStyleExtension(UiStyle.material)],
     colorScheme: scheme,
     scaffoldBackgroundColor: scheme.surface,
     appBarTheme: AppBarTheme(
@@ -178,6 +225,94 @@ ThemeData buildAppTheme(AppThemeSpec spec) {
   );
 }
 
+/// Liquid Glass uslubi: shaffof sirtlar, yumaloq shakllar, yorug' chegaralar.
+/// Kartalar va pastki panel [GlassPanel] bilan chiziladi (lib/widgets/glass.dart).
+ThemeData _buildGlassTheme(ColorScheme scheme) {
+  final bool dark = scheme.brightness == Brightness.dark;
+  final Color edge = Colors.white.withValues(alpha: dark ? 0.30 : 0.75);
+  final fieldFill = Colors.white.withValues(alpha: dark ? 0.10 : 0.40);
+  OutlineInputBorder border(Color c, [double w = 1]) =>
+      OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: c, width: w));
+  final sheetColor = scheme.surface.withValues(alpha: dark ? 0.78 : 0.86);
+  return ThemeData(
+    useMaterial3: true,
+    extensions: const [UiStyleExtension(UiStyle.glass)],
+    colorScheme: scheme,
+    scaffoldBackgroundColor: Colors.transparent,
+    splashFactory: InkSparkle.splashFactory,
+    appBarTheme: AppBarTheme(
+      backgroundColor: Colors.transparent,
+      foregroundColor: scheme.onSurface,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      centerTitle: true,
+    ),
+    cardTheme: CardThemeData(
+      color: Colors.white.withValues(alpha: dark ? 0.10 : 0.45),
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26), side: BorderSide(color: edge)),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: fieldFill,
+      border: border(edge),
+      enabledBorder: border(edge),
+      focusedBorder: border(scheme.primary, 1.6),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        shape: const StadiumBorder(),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(shape: const StadiumBorder(), side: BorderSide(color: edge)),
+    ),
+    textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(shape: const StadiumBorder())),
+    chipTheme: ChipThemeData(
+      shape: const StadiumBorder(),
+      side: BorderSide(color: edge),
+      backgroundColor: fieldFill,
+    ),
+    // Pastki panel GlassPanel ichida chiziladi, shuning uchun o'zi shaffof
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      indicatorColor: Colors.white.withValues(alpha: dark ? 0.22 : 0.65),
+      elevation: 0,
+      height: 66,
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: sheetColor,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32), side: BorderSide(color: edge)),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: sheetColor,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: sheetColor,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22), side: BorderSide(color: edge)),
+    ),
+    drawerTheme: DrawerThemeData(
+      backgroundColor: sheetColor,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.horizontal(right: Radius.circular(32))),
+    ),
+    listTileTheme: ListTileThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+    ),
+  );
+}
+
 /// Sahifa orqasiga mavzu rasmini qo'yadi va ustidan matn o'qiladigan parda tortadi.
 class ThemedBackground extends StatelessWidget {
   final Widget child;
@@ -189,7 +324,9 @@ class ThemedBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     final spec = themeController.current;
     final scheme = Theme.of(context).colorScheme;
-    final double veil = scrim ?? spec.scrim;
+    final bool glass = uiStyleOf(context) == UiStyle.glass;
+    // Shisha uslubida rasm ko'proq ko'rinadi, ustiga yumshoq rangli nur tushadi
+    final double veil = (scrim ?? spec.scrim) * (glass ? 0.6 : 1.0);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -212,10 +349,25 @@ class ThemedBackground extends StatelessWidget {
             ),
           ),
         ),
+        if (glass) ...[
+          Positioned(top: -120, left: -90, child: glow(scheme.primary.withValues(alpha: 0.38), 340)),
+          Positioned(bottom: -140, right: -110, child: glow(scheme.tertiary.withValues(alpha: 0.32), 380)),
+        ],
         child,
       ],
     );
   }
+
+  static Widget glow(Color color, double size) => IgnorePointer(
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
+          ),
+        ),
+      );
 }
 
 /// Mazmunning eng katta kengligi (kompyuterdagi keng oyna uchun)

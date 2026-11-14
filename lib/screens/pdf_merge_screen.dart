@@ -13,6 +13,7 @@ import '../platform.dart';
 import '../services/media_tools.dart';
 import '../services/profile_service.dart';
 import 'viewers.dart';
+import '../widgets/glass.dart';
 
 // ================= PDF FAYLLARNI BIRLASHTIRISH (INTERNETSIZ) =================
 class PdfMergeScreen extends StatefulWidget {
@@ -114,7 +115,7 @@ class _PdfMergeScreenState extends State<PdfMergeScreen> {
             Expanded(
               child: (_files.isEmpty && _results.isEmpty)
                   ? Center(
-                      child: Card(
+                      child: AppCard(
                         child: Padding(
                           padding: const EdgeInsets.all(20),
                           child: Column(
@@ -133,7 +134,7 @@ class _PdfMergeScreenState extends State<PdfMergeScreen> {
                         ),
                       ),
                     )
-                  : Card(
+                  : AppCard(
                       clipBehavior: Clip.antiAlias,
                       child: Column(
                         children: [

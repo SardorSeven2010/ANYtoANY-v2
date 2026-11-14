@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import 'style_screen.dart';
 
 // ================= ILOVA MAVZUSINI TANLASH =================
 class ThemeScreen extends StatelessWidget {
@@ -12,16 +13,37 @@ class ThemeScreen extends StatelessWidget {
       appBar: AppBar(title: const Text("Ilova mavzusi")),
       body: ListenableBuilder(
         listenable: themeController,
-        builder: (context, _) => GridView.builder(
-          padding: const EdgeInsets.all(16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 14,
-            crossAxisSpacing: 14,
-            childAspectRatio: 0.72,
-          ),
-          itemCount: appThemes.length,
-          itemBuilder: (context, i) => _ThemeTile(theme: appThemes[i]),
+        builder: (context, _) => CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Ko'rinish uslubi", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 10),
+                    StyleOptions(selected: themeController.style, onSelect: themeController.selectStyle),
+                    const SizedBox(height: 18),
+                    const Text("Rang va fon", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.all(16),
+              sliver: SliverGrid.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 14,
+                  crossAxisSpacing: 14,
+                  childAspectRatio: 0.72,
+                ),
+                itemCount: appThemes.length,
+                itemBuilder: (context, i) => _ThemeTile(theme: appThemes[i]),
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -8,6 +8,7 @@ import '../services/media_tools.dart';
 import '../services/profile_service.dart';
 import 'subscription_screen.dart';
 import 'viewers.dart';
+import '../widgets/glass.dart';
 
 /// Konvertor turlari. Har biri alohida ishga javob beradi, ular bir-birini takrorlamaydi.
 enum ConverterMode {
@@ -404,7 +405,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
             Expanded(
               child: (_selectedFiles.isEmpty && _results.isEmpty)
                   ? Center(
-                      child: Card(
+                      child: AppCard(
                         child: Padding(
                           padding: const EdgeInsets.all(20),
                           child: Column(
@@ -422,7 +423,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
                         ),
                       ),
                     )
-                  : Card(
+                  : AppCard(
                       clipBehavior: Clip.antiAlias,
                       child: ListView(
                         children: [

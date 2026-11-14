@@ -8,6 +8,7 @@ import 'package:photo_manager/photo_manager.dart';
 import '../platform.dart';
 import '../services/media_tools.dart';
 import 'player_screen.dart';
+import '../widgets/glass.dart';
 
 enum MediaKind { video, audio }
 
@@ -300,7 +301,7 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Card(
+        AppCard(
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -333,7 +334,7 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Card(
+        AppCard(
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -415,7 +416,7 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
     final asset = entry.asset;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Card(
+      child: AppCard(
         clipBehavior: Clip.antiAlias,
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
