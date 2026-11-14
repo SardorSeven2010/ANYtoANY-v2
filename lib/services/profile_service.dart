@@ -51,7 +51,8 @@ class ProfileService extends ChangeNotifier {
     }
     final prefs = await SharedPreferences.getInstance();
 
-    deviceId = androidId ?? (isAndroidApp ? "unknown_device" : _computerName());
+    deviceId = androidId ??
+        (isAndroidApp ? "unknown_device" : (isIOSApp ? "iPhone" : _computerName()));
     email = _client?.auth.currentUser?.email ?? prefs.getString('user_email') ?? "";
     final int localSec = prefs.getInt('total_seconds') ?? 0;
     if (localSec > totalSeconds) totalSeconds = localSec;

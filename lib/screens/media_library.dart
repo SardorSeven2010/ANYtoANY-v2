@@ -99,6 +99,10 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
   int _page = 0;
 
   bool get _isVideo => widget.kind == MediaKind.video;
+
+  /// iPhone'da "Rasmlar" kutubxonasida audio yo'q, musiqa esa ilovalarga yopiq:
+  /// audio faqat Fayllar ilovasidan tanlanadi
+  bool get _filesOnly => isIOSApp && !_isVideo;
   RequestType get _type => _isVideo ? RequestType.video : RequestType.audio;
 
   PermissionRequestOption get _permission => PermissionRequestOption(
@@ -114,6 +118,10 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
   /// Kompyuterda papkalar darhol o'qiladi. Telefonda ruxsat avval berilgan bo'lsa
   /// ro'yxat yuklanadi, aks holda ruxsat so'rash tugmasi ko'rsatiladi.
   Future<void> _init() async {
+    if (_filesOnly) {
+      setState(() => _loading = false);
+      return;
+    }
     if (isDesktopApp) {
       await _reload();
       return;
@@ -247,7 +255,9 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
   /// Ruxsatsiz ham ishlaydi: tizimning fayl tanlash oynasi orqali
   Future<void> _pickFromFiles() async {
     try {
-      final file = await FilePicker.pickFile(type: _isVideo ? FileType.video : FileType.audio);
+      final file = _filesOnly
+          ? await FilePicker.pickFile(type: FileType.custom, allowedExtensions: audioInputs)
+          : await FilePicker.pickFile(type: _isVideo ? FileType.video : FileType.audio);
       final path = file?.path;
       if (file == null || path == null || !mounted) return;
       _play(path, file.name);
@@ -269,6 +279,7 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_filesOnly) return _filesOnlyCard();
     if (!_granted) return _permissionCard();
     return RefreshIndicator(
       onRefresh: _reload,
@@ -281,6 +292,39 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
           return _tile(_items[i - 1]);
         },
       ),
+    );
+  }
+
+  Widget _filesOnlyCard() {
+    final scheme = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                Icon(Icons.library_music_rounded, size: 64, color: scheme.primary),
+                const SizedBox(height: 10),
+                const Text("Audio fayllar", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Text(
+                  "iPhone'da audio fayllarni Fayllar ilovasidan tanlab tinglaysiz.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: _pickFromFiles,
+                  icon: const Icon(Icons.folder_open_rounded),
+                  label: const Text("Fayllardan tanlash"),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 

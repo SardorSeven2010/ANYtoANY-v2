@@ -29,6 +29,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; Administrator huquqi bo'lmasa, faqat joriy foydalanuvchi uchun o'rnatishga ruxsat
 PrivilegesRequiredOverridesAllowed=dialog
 UninstallDisplayIcon={app}\ANYtoANY.exe
+SetupIconFile=anytoany.ico
 UninstallDisplayName=ANYtoANY
 
 [Languages]

@@ -1,4 +1,4 @@
-name: Build Android APK va Windows EXE
+name: Build Android, Windows, Linux va iOS
 
 on:
   push:
@@ -85,6 +85,7 @@ jobs:
           sed -i 's/set(BINARY_NAME "any_to_any")/set(BINARY_NAME "ANYtoANY")/' windows/CMakeLists.txt
           sed -i 's/window.Create(L"any_to_any"/window.Create(L"ANYtoANY"/; s/Size size(1280, 720)/Size size(1100, 820)/; s/Point origin(10, 10)/Point origin(80, 40)/' windows/runner/main.cpp
           sed -i 's/"any_to_any.exe"/"ANYtoANY.exe"/; s/"any_to_any"/"ANYtoANY"/g; s/"com.anytoany.converter"/"ANYtoANY"/; s/com.anytoany.converter\. All/ANYtoANY. All/' windows/runner/Runner.rc
+          cp installer/anytoany.ico windows/runner/resources/app_icon.ico
           grep -n "BINARY_NAME \"" windows/CMakeLists.txt
           grep -n "window.Create" windows/runner/main.cpp
 
@@ -104,6 +105,20 @@ jobs:
             if (Test-Path $src) { Copy-Item $src $release -Force }
           }
           Get-ChildItem $release | Select-Object Name, Length | Format-Table -AutoSize
+
+      - name: Ilovani ishga tushirib ko'rish
+        shell: pwsh
+        run: |
+          # Hamma DLL'lar topilishi va ilova ochilib turishini tekshiradi
+          $exe = "build\windows\x64\runner\Release\ANYtoANY.exe"
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 25
+          if ($p.HasExited) {
+            Write-Error "Ilova 25 soniya ichida yopildi (chiqish kodi $($p.ExitCode))"
+            exit 1
+          }
+          Stop-Process -Id $p.Id -Force
+          "Ilova ishga tushdi va 25 soniya ishlab turdi"
 
       - name: O'rnatuvchi (Setup.exe) yaratish
         shell: pwsh
@@ -126,3 +141,126 @@ jobs:
         with:
           name: ANYtoANY-Windows-Portable
           path: build/windows/x64/runner/Release/
+
+  linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Kodlarni yuklab olish
+        uses: actions/checkout@v4
+
+      - name: Linux uchun kerakli dasturlar
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libjson-glib-dev patchelf xvfb
+
+      - name: Flutter o'rnatish
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: 'stable'
+
+      - name: Linux papkani yaratish va ilova nomini sozlash
+        run: |
+          cp pubspec.yaml "$RUNNER_TEMP/user_pubspec.yaml"
+          cp lib/main.dart "$RUNNER_TEMP/user_main.dart"
+          flutter create --platforms=linux --org com.anytoany.converter --project-name any_to_any .
+          cp "$RUNNER_TEMP/user_pubspec.yaml" pubspec.yaml
+          cp "$RUNNER_TEMP/user_main.dart" lib/main.dart
+          sed -i 's/set(BINARY_NAME "any_to_any")/set(BINARY_NAME "anytoany")/' linux/CMakeLists.txt
+          sed -i 's/"any_to_any"/"ANYtoANY"/g; s/gtk_window_set_default_size(window, 1280, 720)/gtk_window_set_default_size(window, 1100, 820)/' linux/runner/my_application.cc
+          grep -n 'BINARY_NAME "' linux/CMakeLists.txt
+          grep -n "ANYtoANY\|set_default_size" linux/runner/my_application.cc
+
+      - name: Kutubxonalarni o'rnatish
+        run: flutter pub get
+
+      - name: Linux ilovani yig'ish
+        run: flutter build linux --release
+
+      - name: Kutubxonalarni tekshirish va tuzatish
+        run: |
+          PLUGIN_DIR=$(python3 -c "import json; d=json.load(open('.flutter-plugins-dependencies')); print([p['path'] for p in d['plugins']['linux'] if p['name']=='pdf_combiner'][0])")
+          bash installer/linux/check_bundle.sh build/linux/x64/release/bundle "$PLUGIN_DIR/linux/libpdfium.so"
+
+      - name: Ilovani ishga tushirib ko'rish
+        run: |
+          set +e
+          xvfb-run -a timeout 25s build/linux/x64/release/bundle/anytoany > "$RUNNER_TEMP/run.log" 2>&1
+          code=$?
+          tail -30 "$RUNNER_TEMP/run.log"
+          if [ "$code" -ne 124 ]; then
+            echo "Ilova 25 soniya ichida yopildi (chiqish kodi $code)"
+            exit 1
+          fi
+          echo "Ilova ishga tushdi va 25 soniya ishlab turdi"
+
+      - name: .deb va .tar.gz paketlarini yaratish
+        run: |
+          VERSION=$(sed -nE 's/^version:[[:space:]]*([0-9.]+).*/\1/p' pubspec.yaml)
+          bash installer/linux/build_deb.sh build/linux/x64/release/bundle "$VERSION" build/linux-dist
+          tar -C build/linux/x64/release -czf build/linux-dist/ANYtoANY-linux-x64.tar.gz --transform 's,^bundle,ANYtoANY,' bundle
+          ls -la build/linux-dist
+
+      - name: .deb paketni yuklashga chiqarish
+        uses: actions/upload-artifact@v4
+        with:
+          name: ANYtoANY-Linux-deb
+          path: build/linux-dist/*.deb
+
+      - name: .tar.gz arxivni yuklashga chiqarish
+        uses: actions/upload-artifact@v4
+        with:
+          name: ANYtoANY-Linux-tar
+          path: build/linux-dist/ANYtoANY-linux-x64.tar.gz
+
+  ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Kodlarni yuklab olish
+        uses: actions/checkout@v4
+
+      - name: Flutter o'rnatish
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: 'stable'
+
+      - name: iOS papkani yaratish va sozlash
+        run: |
+          cp pubspec.yaml "$RUNNER_TEMP/user_pubspec.yaml"
+          cp lib/main.dart "$RUNNER_TEMP/user_main.dart"
+          flutter create --platforms=ios --org com.anytoany.converter --project-name any_to_any .
+          cp "$RUNNER_TEMP/user_pubspec.yaml" pubspec.yaml
+          cp "$RUNNER_TEMP/user_main.dart" lib/main.dart
+          PL=ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ANYtoANY" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string Videolaringizni ilovada ochish va aylantirish uchun kerak." "$PL"
+          /usr/libexec/PlistBuddy -c "Add :NSAppleMusicUsageDescription string Audio fayllarni tanlash uchun kerak." "$PL"
+          /usr/libexec/PlistBuddy -c "Add :UIFileSharingEnabled bool true" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :LSSupportsOpeningDocumentsInPlace bool true" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes array" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes:0 string tel" "$PL"
+          plutil -lint "$PL"
+          grep -m1 "IPHONEOS_DEPLOYMENT_TARGET" ios/Runner.xcodeproj/project.pbxproj
+
+      - name: Kutubxonalarni o'rnatish
+        run: flutter pub get
+
+      - name: iOS ilovani yig'ish (imzosiz)
+        run: flutter build ios --release --no-codesign
+
+      - name: .ipa fayl yaratish
+        run: |
+          mkdir -p build/ios-dist/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios-dist/Payload/
+          cd build/ios-dist
+          zip -qry ANYtoANY-unsigned.ipa Payload
+          ls -la
+
+      - name: .ipa faylni yuklashga chiqarish
+        uses: actions/upload-artifact@v4
+        with:
+          name: ANYtoANY-iOS-unsigned-ipa
+          path: build/ios-dist/ANYtoANY-unsigned.ipa

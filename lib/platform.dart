@@ -2,11 +2,17 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-// Ilova Android telefonda ham, Windows kompyuterda ham ishlaydi.
+// Ilova Android, iPhone (iOS), Windows va Linux'da ishlaydi.
 // Platformaga bog'liq joylar shu yordamchilar orqali ajratiladi.
 
 /// Android telefon yoki planshet
 bool get isAndroidApp => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+/// iPhone yoki iPad
+bool get isIOSApp => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+/// Linux kompyuter
+bool get isLinuxApp => !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 
 /// Kompyuter (Windows, Linux yoki macOS)
 bool get isDesktopApp =>

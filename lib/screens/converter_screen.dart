@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 import '../config.dart';
+import '../platform.dart';
 import '../services/media_tools.dart';
 import '../services/profile_service.dart';
 import 'subscription_screen.dart';
@@ -139,7 +140,10 @@ class _ConverterScreenState extends State<ConverterScreen> {
         ConverterMode.video ||
         ConverterMode.videoToAudio =>
           await FilePicker.pickFiles(type: FileType.video),
-        ConverterMode.audio => await FilePicker.pickFiles(type: FileType.audio),
+        // iPhone'da musiqa kutubxonasi ilovalarga yopiq: audio Fayllar ilovasidan tanlanadi
+        ConverterMode.audio => isIOSApp
+            ? await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: audioInputs)
+            : await FilePicker.pickFiles(type: FileType.audio),
         ConverterMode.pdfImage => await FilePicker.pickFiles(
             type: FileType.custom,
             allowedExtensions: ["pdf", ...imageInputs],

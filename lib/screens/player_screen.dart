@@ -23,6 +23,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   static const List<double> _speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
   late final VideoPlayerController _controller;
+  bool _usesController = false;
   bool _ready = false;
   String? _error;
   double _speed = 1.0;
@@ -33,6 +34,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   void initState() {
     super.initState();
+    if (isLinuxApp) {
+      // Linux uchun ichki pleyer yo'q: fayl kompyuterdagi pleyerda (VLC, Videos va h.k.) ochiladi
+      _error = "Linux'da video va audio kompyuteringizdagi pleyerda ochiladi.";
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openInSystemPlayer());
+      return;
+    }
+    _usesController = true;
     _controller = VideoPlayerController.file(File(widget.path));
     _controller.addListener(_onTick);
     _controller.initialize().then((_) {
@@ -61,8 +69,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
-    _controller.removeListener(_onTick);
-    _controller.dispose();
+    if (_usesController) {
+      _controller.removeListener(_onTick);
+      _controller.dispose();
+    }
     if (_awake) WakelockPlus.disable().catchError((Object _) {});
     super.dispose();
   }
@@ -99,7 +109,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return AppScaffold(
       appBar: AppBar(title: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis)),
       body: _error != null
-          ? _message(Icons.error_outline_rounded, _error!)
+          ? _message(isLinuxApp ? Icons.play_circle_outline_rounded : Icons.error_outline_rounded, _error!)
           : !_ready
               ? const Center(child: CircularProgressIndicator())
               : Column(

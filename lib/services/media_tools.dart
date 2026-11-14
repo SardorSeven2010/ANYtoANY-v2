@@ -4,6 +4,10 @@ import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart' as pdf;
+import 'package:pdf_combiner/models/image_from_pdf_config.dart';
+import 'package:pdf_combiner/models/image_scale.dart';
+import 'package:pdf_combiner/models/merge_input.dart';
+import 'package:pdf_combiner/pdf_combiner.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdfx/pdfx.dart' as pdfx;
 
@@ -114,7 +118,11 @@ Future<Directory> resolveOutputDir() async {
   return await getExternalStorageDirectory() ?? await getApplicationDocumentsDirectory();
 }
 
-String outputDirLabel(Directory dir) =>
+String outputDirLabel(Directory dir) => isIOSApp
+    ? "Fayllar ilovasidagi ANYtoANY papkasiga"
+    : _outputDirLabel(dir);
+
+String _outputDirLabel(Directory dir) =>
     dir.path == publicDownloadDir ? "Download papkasiga" : "${dir.path} papkasiga";
 
 /// Mavjud faylni ustidan yozmaslik uchun takrorlanmas nom tanlaydi
@@ -172,6 +180,61 @@ Future<void> deleteQuietly(String path) async {
   } catch (_) {}
 }
 
+/// PNG faylning o'lchami (eni, bo'yi) - fayl sarlavhasidan o'qiladi
+(int, int)? pngSize(List<int> bytes) {
+  if (bytes.length < 24) return null;
+  int read(int offset) =>
+      (bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3];
+  return (read(16), read(20));
+}
+
+/// Linux'da PDF sahifalarini PNG qilib chizadi (pdfx Linux'da ishlamaydi, PDFium ishlatiladi).
+/// Hamma sahifalar bir xil o'lchamda bo'lsa, aniqroq bo'lishi uchun 2 barobar kattaroq chiziladi.
+/// Rasmlar [workDir] ichida yaratiladi va sahifa tartibida qaytariladi.
+Future<List<String>> renderPdfPagesWithPdfium(String pdfPath, Directory workDir) async {
+  final normal = Directory(joinPath(workDir.path, "x1"));
+  await normal.create(recursive: true);
+  List<String> pages = await PdfCombiner.createImageFromPDF(
+    input: MergeInput.path(pdfPath),
+    outputDirPath: normal.path,
+    config: const ImageFromPdfConfig(createOneImage: false),
+  );
+
+  final sizes = [for (final page in pages) pngSize(await File(page).openRead(0, 24).expand((b) => b).toList())];
+  final first = sizes.isEmpty ? null : sizes.first;
+  if (first != null && sizes.every((size) => size == first)) {
+    final sharp = Directory(joinPath(workDir.path, "x2"));
+    await sharp.create(recursive: true);
+    try {
+      pages = await PdfCombiner.createImageFromPDF(
+        input: MergeInput.path(pdfPath),
+        outputDirPath: sharp.path,
+        config: ImageFromPdfConfig(
+          rescale: ImageScale(width: first.$1 * 2, height: first.$2 * 2),
+          createOneImage: false,
+        ),
+      );
+    } catch (_) {
+      // aniqroq chizib bo'lmasa, oddiy o'lchamdagisi qoladi
+    }
+  }
+  return pages;
+}
+
+/// Vaqtinchalik ishchi papka yaratadi
+Future<Directory> createWorkDir(String prefix) async {
+  final temp = await getTemporaryDirectory();
+  final dir = Directory(joinPath(temp.path, "${prefix}_${DateTime.now().microsecondsSinceEpoch}"));
+  await dir.create(recursive: true);
+  return dir;
+}
+
+Future<void> deleteDirQuietly(Directory dir) async {
+  try {
+    if (await dir.exists()) await dir.delete(recursive: true);
+  } catch (_) {}
+}
+
 /// PDF ning har bir sahifasini alohida rasm qilib saqlaydi
 Future<List<String>> pdfToImages({
   required String pdfPath,
@@ -180,6 +243,15 @@ Future<List<String>> pdfToImages({
   required String baseName,
   required Set<String> usedPaths,
 }) async {
+  if (isLinuxApp) {
+    return _pdfToImagesWithPdfium(
+      pdfPath: pdfPath,
+      format: format,
+      outDir: outDir,
+      baseName: baseName,
+      usedPaths: usedPaths,
+    );
+  }
   final outputs = <String>[];
   final document = await pdfx.PdfDocument.openFile(pdfPath);
   try {
@@ -203,6 +275,34 @@ Future<List<String>> pdfToImages({
     }
   } finally {
     await document.close();
+  }
+  return outputs;
+}
+
+Future<List<String>> _pdfToImagesWithPdfium({
+  required String pdfPath,
+  required String format,
+  required Directory outDir,
+  required String baseName,
+  required Set<String> usedPaths,
+}) async {
+  final outputs = <String>[];
+  final work = await createWorkDir("anytoany_pdf");
+  try {
+    final pages = await renderPdfPagesWithPdfium(pdfPath, work);
+    for (int i = 0; i < pages.length; i++) {
+      final pageName = pages.length > 1 ? "${baseName}_${i + 1}-bet" : baseName;
+      final outPath = uniquePath(outDir, pageName, format, usedPaths);
+      if (format == "png") {
+        await File(pages[i]).copy(outPath);
+      } else {
+        final ok = await runFfmpeg(["-y", "-i", pages[i], "-q:v", "2", outPath]);
+        if (!ok) throw Exception("${i + 1}-sahifani JPG ga aylantirib bo'lmadi");
+      }
+      outputs.add(outPath);
+    }
+  } finally {
+    await deleteDirQuietly(work);
   }
   return outputs;
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:pdfx/pdfx.dart' as pdfx;
 
 import '../app_theme.dart';
+import '../platform.dart';
 import '../services/media_tools.dart';
 import 'player_screen.dart';
 
@@ -51,27 +52,73 @@ class PdfViewerScreen extends StatefulWidget {
 }
 
 class _PdfViewerScreenState extends State<PdfViewerScreen> {
-  late pdfx.PdfController _pdfController;
+  pdfx.PdfController? _pdfController;
+
+  // Linux'da pdfx ishlamaydi: sahifalar PDFium bilan rasm qilib chiziladi
+  Future<List<String>>? _pages;
+  Directory? _workDir;
 
   @override
   void initState() {
     super.initState();
-    _pdfController = pdfx.PdfController(
-      document: pdfx.PdfDocument.openFile(widget.pdfPath),
-    );
+    if (isLinuxApp) {
+      _pages = _renderPages();
+    } else {
+      _pdfController = pdfx.PdfController(
+        document: pdfx.PdfDocument.openFile(widget.pdfPath),
+      );
+    }
+  }
+
+  Future<List<String>> _renderPages() async {
+    final dir = await createWorkDir("anytoany_view");
+    _workDir = dir;
+    return renderPdfPagesWithPdfium(widget.pdfPath, dir);
   }
 
   @override
   void dispose() {
-    _pdfController.dispose();
+    _pdfController?.dispose();
+    final dir = _workDir;
+    if (dir != null) deleteDirQuietly(dir);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final controller = _pdfController;
     return AppScaffold(
       appBar: AppBar(title: Text(widget.fileName, maxLines: 1, overflow: TextOverflow.ellipsis)),
-      body: pdfx.PdfView(controller: _pdfController),
+      body: controller != null ? pdfx.PdfView(controller: controller) : _renderedPages(),
+    );
+  }
+
+  Widget _renderedPages() {
+    return FutureBuilder<List<String>>(
+      future: _pages,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return const Center(child: Text("PDF faylni ochib bo'lmadi"));
+        final pages = snapshot.data;
+        if (pages == null) return const Center(child: CircularProgressIndicator());
+        return InteractiveViewer(
+          maxScale: 5,
+          child: ListView.separated(
+            padding: const EdgeInsets.all(12),
+            itemCount: pages.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
+            itemBuilder: (context, i) => Column(
+              children: [
+                Material(
+                  elevation: 2,
+                  child: Image.file(File(pages[i]), fit: BoxFit.fitWidth, width: double.infinity),
+                ),
+                const SizedBox(height: 4),
+                Text("${i + 1} / ${pages.length}", style: const TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
