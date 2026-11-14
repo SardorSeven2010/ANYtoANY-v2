@@ -29,12 +29,14 @@ fi
 
 # Tekshiriladigan va tuzatiladigan kutubxonalar: haqiqiy fayllar (symlink emas).
 # libapp.so (Dart kodi) va libflutter_linux_gtk.so ga tegilmaydi.
+# libdartjni.so - Android'dagi Java bilan ishlash uchun (jni paketi); Linux'da hech qachon
+# yuklanmaydi va Java'ni (libjvm.so) talab qilgani uchun tekshiruvdan chiqariladi.
 libs=()
 for file in "$LIB"/*.so "$LIB"/*.so.*; do
   [ -e "$file" ] || continue
   [ -L "$file" ] && continue
   case "$(basename "$file")" in
-    libapp.so|libflutter_linux_gtk.so) continue ;;
+    libapp.so|libflutter_linux_gtk.so|libdartjni.so) continue ;;
   esac
   libs+=("$file")
 done
