@@ -42,7 +42,7 @@ jobs:
         run: flutter pub get
 
       - name: Testlar
-        run: flutter test --exclude-tags ffmpeg
+        run: flutter test --exclude-tags "ffmpeg || mpv"
 
       - name: Release APK yig'ish (protsessor turi bo'yicha alohida, kichikroq hajm)
         run: flutter build apk --release --split-per-abi
@@ -177,8 +177,8 @@ jobs:
       - name: Kutubxonalarni o'rnatish
         run: flutter pub get
 
-      - name: Konvertatsiya testlari (tizim ffmpeg'i bilan)
-        run: flutter test --tags ffmpeg
+      - name: Konvertatsiya va pleyer dvigateli testlari (haqiqiy ffmpeg va libmpv bilan)
+        run: flutter test --tags "ffmpeg || mpv"
 
       - name: Linux ilovani yig'ish
         run: flutter build linux --release
