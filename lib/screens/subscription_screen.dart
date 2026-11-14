@@ -84,7 +84,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                       const Text("PRO imkoniyatlari", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       _feature("Barcha video kodeklar: H.265, VP9, MPEG-4, tez ko'chirish (bepul tarifda faqat H.264)"),
-                      _feature("PDF fayllarni Word, PowerPoint va Excel ga aylantirish"),
+                      _feature("PDF ni Word, PowerPoint va Excel ga, hujjatlarni esa PDF ga aylantirish"),
                       _feature("Bir vaqtda cheklanmagan sondagi fayl (bepul tarifda $freeFileLimit ta)"),
                     ],
                   ),

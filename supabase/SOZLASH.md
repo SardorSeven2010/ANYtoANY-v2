@@ -34,14 +34,24 @@ Admin panelda u ro'yxatning tepasida, sariq hoshiyada chiqadi:
 Muddat tugagach PRO o'zi o'chadi.
 
 PRO nima beradi: barcha video kodeklar (bepul tarifda faqat H.264), PDF ni
-Word / PowerPoint / Excel ga aylantirish va cheklanmagan sondagi fayl
-(bepul tarifda bir martada 3 ta).
+Word / PowerPoint / Excel ga va hujjatlarni PDF ga aylantirish, cheklanmagan
+sondagi fayl (bepul tarifda bir martada 3 ta).
 
-## 4. PDF ni Word / PowerPoint / Excel ga aylantirish (ixtiyoriy)
+## 4. Hujjatlarni internet orqali aylantirish (ixtiyoriy)
 
-Bu imkoniyat Adobe PDF Services orqali ishlaydi: oyiga 500 ta hujjat bepul,
-karta talab qilinmaydi. Sozlanmaguncha ilovada "Konvertatsiya xizmati hali
+Ilovadagi ikki satr shu funksiya orqali ishlaydi:
+
+- **PDF dan Word** — PDF ni Word, PowerPoint yoki Excel ga;
+- **Hujjatdan PDF** — Word, PowerPoint, Excel, RTF va TXT ni PDF ga.
+
+Ular Adobe PDF Services'dan foydalanadi: oyiga 500 ta hujjat bepul, karta
+talab qilinmaydi. Sozlanmaguncha ilovada "Konvertatsiya xizmati hali
 sozlanmagan" degan xabar chiqadi, qolgan hamma narsa ishlayveradi.
+
+**Muhim:** `index.ts` fayli yangilanganda (masalan "Hujjatdan PDF" qo'shilganda)
+funksiyani qayta joylash kerak: Supabase'da funksiyani ochib, ichidagi kodni
+yangi `index.ts` bilan to'liq almashtiring va **Deploy** ni bosing. Kalitlarni
+(Secrets) qayta kiritish shart emas.
 
 ### 4.1. Adobe kalitlarini olish
 

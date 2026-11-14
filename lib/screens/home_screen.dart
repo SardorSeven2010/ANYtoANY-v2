@@ -148,6 +148,7 @@ class _ConverterTab extends StatelessWidget {
         // Profil yuklanganda yoki PRO o'zgarganda kartochka yangilanadi
         ListenableBuilder(listenable: profile, builder: (context, _) => _statusCard(scheme)),
         const SizedBox(height: 14),
+        const _SectionTitle("Video va audio"),
         _ToolRow(
           icon: Icons.movie_filter_rounded,
           title: "Video konvertor",
@@ -161,17 +162,25 @@ class _ConverterTab extends StatelessWidget {
           onTap: () => _open(context, const ConverterScreen(mode: ConverterMode.videoToAudio)),
         ),
         _ToolRow(
-          icon: Icons.transform_rounded,
-          title: "Media konvertor",
-          subtitle: "Audio, rasm va GIF formatlari",
-          onTap: () => _open(context, const ConverterScreen(mode: ConverterMode.media)),
+          icon: Icons.graphic_eq_rounded,
+          title: "Audio konvertor",
+          subtitle: "MP3, WAV, FLAC va boshqalar",
+          onTap: () => _open(context, const ConverterScreen(mode: ConverterMode.audio)),
         ),
+        const _SectionTitle("PDF, hujjat va rasm"),
         _ToolRow(
           icon: Icons.description_rounded,
           title: "PDF dan Word",
           subtitle: "Word, PowerPoint, Excel",
           pro: true,
-          onTap: () => _open(context, const OnlinePdfScreen()),
+          onTap: () => _open(context, const OnlinePdfScreen(mode: OnlineMode.fromPdf)),
+        ),
+        _ToolRow(
+          icon: Icons.note_add_rounded,
+          title: "Hujjatdan PDF",
+          subtitle: "Word, Excel, PowerPoint",
+          pro: true,
+          onTap: () => _open(context, const OnlinePdfScreen(mode: OnlineMode.toPdf)),
         ),
         _ToolRow(
           icon: Icons.merge_rounded,
@@ -181,8 +190,8 @@ class _ConverterTab extends StatelessWidget {
         ),
         _ToolRow(
           icon: Icons.picture_as_pdf_rounded,
-          title: "PDF va rasm",
-          subtitle: "PDF dan rasm, rasmdan PDF",
+          title: "Rasm va PDF",
+          subtitle: "Rasmdan PDF, PDF dan rasm",
           onTap: () => _open(context, const ConverterScreen(mode: ConverterMode.pdfImage)),
         ),
         _ToolRow(
@@ -321,6 +330,28 @@ class _ToolRow extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Konvertor bo'limidagi guruh sarlavhasi
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 6, 4, 8),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.3,
+          color: Theme.of(context).colorScheme.primary,
         ),
       ),
     );

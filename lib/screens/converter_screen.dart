@@ -8,7 +8,20 @@ import '../services/profile_service.dart';
 import 'subscription_screen.dart';
 import 'viewers.dart';
 
-enum ConverterMode { media, video, videoToAudio, pdfImage }
+/// Konvertor turlari. Har biri alohida ishga javob beradi, ular bir-birini takrorlamaydi.
+enum ConverterMode {
+  /// Video -> boshqa video format yoki GIF (kodek tanlash bilan)
+  video,
+
+  /// Video -> audio (ovozni ajratib olish)
+  videoToAudio,
+
+  /// Audio -> boshqa audio format
+  audio,
+
+  /// Rasm -> PNG / JPG / PDF, PDF -> rasm
+  pdfImage,
+}
 
 // ================= KONVERTOR (INTERNETSIZ) =================
 class ConverterScreen extends StatefulWidget {
@@ -32,33 +45,33 @@ class _ConverterScreenState extends State<ConverterScreen> {
   bool _formatChosen = false;
 
   List<String> get _formats => switch (widget.mode) {
-        ConverterMode.media => [...videoFormats, ...audioFormats, "gif", ...imageFormats],
-        ConverterMode.video => videoFormats,
-        ConverterMode.videoToAudio => audioFormats,
+        ConverterMode.video => [...videoFormats, "gif"],
+        ConverterMode.videoToAudio || ConverterMode.audio => audioFormats,
         ConverterMode.pdfImage => ["pdf", ...imageFormats],
       };
 
   String get _title => switch (widget.mode) {
-        ConverterMode.media => "Media konvertor",
         ConverterMode.video => "Video konvertor",
         ConverterMode.videoToAudio => "Videodan audio",
-        ConverterMode.pdfImage => "PDF va rasm",
+        ConverterMode.audio => "Audio konvertor",
+        ConverterMode.pdfImage => "Rasm va PDF",
       };
 
   String get _hint => switch (widget.mode) {
-        ConverterMode.media =>
-          "Video, audio yoki rasm fayllarni tanlang.\nUlar tanlangan formatga internetsiz aylantiriladi.",
         ConverterMode.video =>
           "Videolarni tanlang - ular tanlangan video formatga\nva kodekka aylantiriladi.",
         ConverterMode.videoToAudio =>
           "Videolarni tanlang - ulardan ovoz ajratib olinadi\nva tanlangan audio formatda saqlanadi.",
+        ConverterMode.audio =>
+          "Audio fayllarni tanlang - ular tanlangan\naudio formatga aylantiriladi.",
         ConverterMode.pdfImage =>
-          "PDF tanlasangiz - har bir sahifasi rasm bo'ladi (PNG/JPG).\nRasm tanlasangiz - PDF ga aylanadi.",
+          "Rasm tanlasangiz - PNG, JPG yoki PDF ga aylanadi.\nPDF tanlasangiz - har bir sahifasi rasm bo'ladi.",
       };
 
   String get _pickLabel => switch (widget.mode) {
         ConverterMode.video || ConverterMode.videoToAudio => "Video tanlash",
-        _ => "Fayl tanlash",
+        ConverterMode.audio => "Audio tanlash",
+        ConverterMode.pdfImage => "Fayl tanlash",
       };
 
   void _show(String message, {int seconds = 4}) {
@@ -88,13 +101,12 @@ class _ConverterScreenState extends State<ConverterScreen> {
     if (available.isNotEmpty && !available.contains(_videoCodec)) _videoCodec = available.first;
   }
 
-  /// Media konvertorda format hali tanlanmagan bo'lsa, tanlangan fayllar turiga mos format qo'yiladi:
-  /// video -> MP4, audio -> MP3, rasm -> PNG
+  /// "Rasm va PDF" da format hali tanlanmagan bo'lsa, fayl turiga mos qo'yiladi:
+  /// PDF tanlansa -> PNG (PDF ni PDF ga aylantirib bo'lmaydi), rasm tanlansa -> PDF
   String? _suggestedFormat(List<PlatformFile> files) {
-    if (widget.mode != ConverterMode.media || _formatChosen || files.isEmpty) return null;
-    if (files.every((f) => isVideoFile(f.name))) return "mp4";
-    if (files.every((f) => isAudioFile(f.name))) return "mp3";
-    if (files.every((f) => isImageFile(f.name))) return "png";
+    if (widget.mode != ConverterMode.pdfImage || _formatChosen || files.isEmpty) return null;
+    if (files.every((f) => isPdfFile(f.name))) return "png";
+    if (files.every((f) => isImageFile(f.name))) return "pdf";
     return null;
   }
 
@@ -124,10 +136,10 @@ class _ConverterScreenState extends State<ConverterScreen> {
     List<PlatformFile> files;
     try {
       files = switch (widget.mode) {
-        ConverterMode.media => await FilePicker.pickFiles(type: FileType.any),
         ConverterMode.video ||
         ConverterMode.videoToAudio =>
           await FilePicker.pickFiles(type: FileType.video),
+        ConverterMode.audio => await FilePicker.pickFiles(type: FileType.audio),
         ConverterMode.pdfImage => await FilePicker.pickFiles(
             type: FileType.custom,
             allowedExtensions: ["pdf", ...imageInputs],

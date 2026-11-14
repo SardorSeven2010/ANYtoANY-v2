@@ -5,8 +5,20 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config.dart';
 
-/// PDF ni internet orqali Word / PowerPoint / Excel ga aylantirish.
+/// Hujjatlarni internet orqali aylantirish:
+///   PDF -> Word / PowerPoint / Excel  va  Word / PowerPoint / Excel -> PDF.
 /// Tashqi xizmat kaliti ilovada emas, Supabase Edge Function ichida saqlanadi.
+
+enum OnlineOperation {
+  /// PDF dan boshqa hujjatga
+  export,
+
+  /// Hujjatdan PDF ga
+  create,
+}
+
+/// PDF ga aylantirish mumkin bo'lgan hujjat turlari
+const List<String> onlineSourceFormats = ["doc", "docx", "ppt", "pptx", "xls", "xlsx", "rtf", "txt"];
 
 class OnlineTarget {
   final String format;
@@ -97,37 +109,49 @@ Future<void> _download(String url, String outPath) async {
   }
 }
 
-/// PDF ni [targetFormat] ga aylantirib, [outPath] ga saqlaydi.
-Future<void> convertPdfOnline({
-  required String pdfPath,
-  required String targetFormat,
+/// [sourcePath] dagi faylni aylantirib, [outPath] ga saqlaydi.
+///
+/// [OnlineOperation.export]: PDF -> [targetFormat] (docx / pptx / xlsx).
+/// [OnlineOperation.create]: [sourceFormat] turidagi hujjat -> PDF.
+Future<void> convertOnline({
+  required String sourcePath,
   required String outPath,
+  OnlineOperation operation = OnlineOperation.export,
+  String? targetFormat,
+  String? sourceFormat,
   void Function(String stage)? onStage,
   FunctionInvoker? invoke,
   Duration pollInterval = const Duration(seconds: 2),
 }) async {
   final FunctionInvoker call = invoke ?? _call;
-  onStage?.call("Tayyorlanmoqda...");
-  final start = await call({"action": "start", "targetFormat": targetFormat});
+  final Map<String, dynamic> request = {
+    "operation": operation.name,
+    if (operation == OnlineOperation.export) "targetFormat": targetFormat,
+    if (operation == OnlineOperation.create) "sourceFormat": sourceFormat,
+  };
 
-  onStage?.call("PDF yuklanmoqda...");
+  onStage?.call("Tayyorlanmoqda...");
+  final start = await call({"action": "start", ...request});
+
+  onStage?.call("Fayl yuklanmoqda...");
   await _upload(
     start["uploadUri"].toString(),
-    File(pdfPath),
+    File(sourcePath),
     (start["mediaType"] ?? "application/pdf").toString(),
   );
 
   onStage?.call("Aylantirilmoqda...");
-  final job = await call({
-    "action": "convert",
-    "assetID": start["assetID"],
-    "targetFormat": targetFormat,
-  });
+  final job = await call({"action": "convert", "assetID": start["assetID"], ...request});
 
   final deadline = DateTime.now().add(const Duration(minutes: 4));
   while (true) {
     await Future<void>.delayed(pollInterval);
-    final status = await call({"action": "status", "jobId": job["jobId"], "host": job["host"]});
+    final status = await call({
+      "action": "status",
+      "operation": operation.name,
+      "jobId": job["jobId"],
+      "host": job["host"],
+    });
     if (status["status"] == "done") {
       onStage?.call("Saqlanmoqda...");
       await _download(status["downloadUri"].toString(), outPath);

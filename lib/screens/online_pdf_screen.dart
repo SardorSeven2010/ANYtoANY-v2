@@ -6,11 +6,22 @@ import '../services/media_tools.dart';
 import '../services/online_pdf.dart';
 import '../services/profile_service.dart';
 import 'subscription_screen.dart';
+import 'viewers.dart';
 
-// ================= PDF -> WORD / POWERPOINT / EXCEL (INTERNET ORQALI) =================
-// Faqat PRO obunachilar uchun. Bir nechta PDF ni birdaniga tanlash mumkin.
+/// Onlayn konvertatsiya yo'nalishi
+enum OnlineMode {
+  /// PDF -> Word / PowerPoint / Excel
+  fromPdf,
+
+  /// Word / PowerPoint / Excel -> PDF
+  toPdf,
+}
+
+// ================= HUJJATLARNI INTERNET ORQALI AYLANTIRISH =================
+// Faqat PRO obunachilar uchun. Bir nechta faylni birdaniga tanlash mumkin.
 class OnlinePdfScreen extends StatefulWidget {
-  const OnlinePdfScreen({super.key});
+  final OnlineMode mode;
+  const OnlinePdfScreen({super.key, this.mode = OnlineMode.fromPdf});
 
   @override
   State<OnlinePdfScreen> createState() => _OnlinePdfScreenState();
@@ -23,6 +34,12 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
   String _stage = "";
   final List<String> _results = [];
 
+  bool get _toPdf => widget.mode == OnlineMode.toPdf;
+
+  String get _title => _toPdf ? "Hujjatdan PDF" : "PDF dan Word / PowerPoint";
+
+  List<String> get _allowedExtensions => _toPdf ? onlineSourceFormats : const ["pdf"];
+
   void _show(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -32,9 +49,19 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
 
   Future<void> _pick() async {
     try {
-      final picked = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ["pdf"]);
-      final pdfs = picked.where((f) => f.path != null && isPdfFile(f.name)).toList();
-      if (pdfs.isNotEmpty && mounted) setState(() => _files = pdfs);
+      final picked = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: _allowedExtensions);
+      final usable = picked
+          .where((f) => f.path != null && _allowedExtensions.contains(extensionOf(f.name)))
+          .toList();
+      if (usable.isEmpty) {
+        if (picked.isNotEmpty) {
+          _show(_toPdf
+              ? "Faqat Word, PowerPoint, Excel, RTF yoki TXT fayl tanlang."
+              : "Faqat PDF fayl tanlang.");
+        }
+        return;
+      }
+      if (mounted) setState(() => _files = usable);
     } catch (e) {
       _show("Fayllarni tanlab bo'lmadi: $e");
     }
@@ -43,6 +70,7 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
   Future<void> _convert() async {
     if (_files.isEmpty || _busy) return;
     final files = List<PlatformFile>.of(_files);
+    final String outFormat = _toPdf ? "pdf" : _format;
     setState(() {
       _busy = true;
       _stage = "Tayyorlanmoqda...";
@@ -57,13 +85,15 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
       final usedPaths = <String>{};
       for (int i = 0; i < files.length; i++) {
         final file = files[i];
-        final outPath = uniquePath(outDir, "${baseNameOf(file.name)}_ANYtoANY", _format, usedPaths);
+        final outPath = uniquePath(outDir, "${baseNameOf(file.name)}_ANYtoANY", outFormat, usedPaths);
         final String prefix = files.length > 1 ? "${i + 1}/${files.length}: " : "";
         try {
-          await convertPdfOnline(
-            pdfPath: file.path!,
-            targetFormat: _format,
+          await convertOnline(
+            sourcePath: file.path!,
             outPath: outPath,
+            operation: _toPdf ? OnlineOperation.create : OnlineOperation.export,
+            targetFormat: _toPdf ? null : _format,
+            sourceFormat: _toPdf ? extensionOf(file.name) : null,
             onStage: (stage) {
               if (mounted) setState(() => _stage = "$prefix$stage");
             },
@@ -99,7 +129,7 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      appBar: AppBar(title: const Text("PDF dan Word / PowerPoint")),
+      appBar: AppBar(title: Text(_title)),
       body: ListenableBuilder(
         listenable: profile,
         builder: (context, _) => ListView(
@@ -126,7 +156,9 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                "PDF fayllarni tahrirlanadigan Word, PowerPoint va Excel hujjatiga aylantirish PRO obunada ochiladi.",
+                _toPdf
+                    ? "Word, PowerPoint va Excel hujjatlarini PDF ga aylantirish PRO obunada ochiladi."
+                    : "PDF fayllarni tahrirlanadigan Word, PowerPoint va Excel hujjatiga aylantirish PRO obunada ochiladi.",
                 textAlign: TextAlign.center,
                 style: TextStyle(color: scheme.onSurfaceVariant),
               ),
@@ -159,9 +191,11 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
                 children: [
                   Icon(Icons.cloud_sync_rounded, color: scheme.primary),
                   const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      "PDF internet orqali tahrirlanadigan hujjatga aylantiriladi. Internet kerak bo'ladi.",
+                      _toPdf
+                          ? "Word, PowerPoint, Excel, RTF va TXT fayllar internet orqali PDF ga aylantiriladi."
+                          : "PDF internet orqali tahrirlanadigan hujjatga aylantiriladi. Internet kerak bo'ladi.",
                     ),
                   ),
                 ],
@@ -169,14 +203,18 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
               const SizedBox(height: 14),
               OutlinedButton.icon(
                 onPressed: _busy ? null : _pick,
-                icon: const Icon(Icons.picture_as_pdf_rounded),
-                label: Text(_files.isEmpty ? "PDF fayllarni tanlash" : "Boshqa fayllarni tanlash"),
+                icon: Icon(_toPdf ? Icons.description_rounded : Icons.picture_as_pdf_rounded),
+                label: Text(
+                  _files.isNotEmpty
+                      ? "Boshqa fayllarni tanlash"
+                      : (_toPdf ? "Hujjatlarni tanlash" : "PDF fayllarni tanlash"),
+                ),
               ),
               for (final file in _files)
                 ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.picture_as_pdf_rounded),
+                  leading: Icon(fileIcon(file.name)),
                   title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                   trailing: IconButton(
                     icon: const Icon(Icons.close_rounded),
@@ -184,22 +222,26 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
                     onPressed: _busy ? null : () => setState(() => _files.remove(file)),
                   ),
                 ),
-              const SizedBox(height: 14),
-              const Text("Qaysi formatga:", style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              SegmentedButton<String>(
-                showSelectedIcon: false,
-                segments: [
-                  for (final t in onlineTargets) ButtonSegment<String>(value: t.format, label: Text(t.title)),
-                ],
-                selected: {_format},
-                onSelectionChanged: _busy ? null : (s) => setState(() => _format = s.first),
-              ),
+              if (!_toPdf) ...[
+                const SizedBox(height: 14),
+                const Text("Qaysi formatga:", style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(
+                  showSelectedIcon: false,
+                  segments: [
+                    for (final t in onlineTargets) ButtonSegment<String>(value: t.format, label: Text(t.title)),
+                  ],
+                  selected: {_format},
+                  onSelectionChanged: _busy ? null : (s) => setState(() => _format = s.first),
+                ),
+              ],
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: (_files.isEmpty || _busy) ? null : _convert,
                 icon: const Icon(Icons.bolt_rounded),
-                label: Text(_busy ? _stage : "Aylantirish (${_files.length} ta)"),
+                label: Text(
+                  _busy ? _stage : (_toPdf ? "PDF ga aylantirish (${_files.length} ta)" : "Aylantirish (${_files.length} ta)"),
+                ),
               ),
               if (_busy) ...[
                 const SizedBox(height: 12),
@@ -227,6 +269,13 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
                   leading: Icon(Icons.check_circle_rounded, color: scheme.primary),
                   title: Text(fileNameOf(path), maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(path, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  trailing: canOpenFile(fileNameOf(path))
+                      ? IconButton(
+                          icon: Icon(openIcon(fileNameOf(path))),
+                          tooltip: "Ochish",
+                          onPressed: () => openFile(context, path),
+                        )
+                      : null,
                 ),
             ],
           ),

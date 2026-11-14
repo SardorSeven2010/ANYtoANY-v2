@@ -1,9 +1,11 @@
 // =====================================================================
-// ANYtoANY: PDF -> Word / PowerPoint / Excel (Adobe PDF Services orqali)
+// ANYtoANY: hujjatlarni internet orqali aylantirish (Adobe PDF Services)
+//   operation "export": PDF -> Word / PowerPoint / Excel
+//   operation "create": Word / PowerPoint / Excel / RTF / TXT -> PDF
 //
 // Bu Supabase Edge Function. Adobe kaliti ilovada emas, shu yerda (serverda)
 // saqlanadi. Ilova bu funksiyani uch bosqichda chaqiradi:
-//   1) action "start"   -> PDF yuklash uchun manzil qaytaradi
+//   1) action "start"   -> faylni yuklash uchun manzil qaytaradi
 //   2) action "convert" -> konvertatsiyani boshlaydi
 //   3) action "status"  -> tayyor bo'lsa, yuklab olish manzilini qaytaradi
 //
@@ -24,6 +26,19 @@ const DAILY_LIMIT = Number(Deno.env.get("DAILY_LIMIT") ?? "15");
 const PRO_ONLY = (Deno.env.get("PRO_ONLY") ?? "true").toLowerCase() !== "false";
 
 const TARGETS = new Set(["docx", "pptx", "xlsx"]);
+// PDF ga aylantirish mumkin bo'lgan hujjat turlari
+const SOURCES: Record<string, string> = {
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  rtf: "text/rtf",
+  txt: "text/plain",
+};
+// Ilovadagi amal nomi -> Adobe API yo'li
+const OPERATIONS: Record<string, string> = { export: "exportpdf", create: "createpdf" };
 const BASE_URL = new URL(ADOBE_BASE);
 const ADOBE_HOST = /^pdf-services(-[a-z0-9]+)?\.adobe\.io$/;
 const JOB_ID = /^[A-Za-z0-9_-]{6,128}$/;
@@ -155,47 +170,63 @@ function allowedHost(host: string): boolean {
 // --------------------------------------------------------------- Amallar
 type Body = Record<string, unknown>;
 
+function operationOf(body: Body): string {
+  const operation = String(body.operation ?? "export");
+  if (!(operation in OPERATIONS)) throw new HttpError(400, "bad_request", "operation noto'g'ri");
+  return operation;
+}
+
 function targetOf(body: Body): string {
   const target = String(body.targetFormat ?? "");
   if (!TARGETS.has(target)) throw new HttpError(400, "bad_request", "targetFormat noto'g'ri");
   return target;
 }
 
-/** 1-bosqich: PDF yuklanadigan vaqtinchalik manzilni ochadi. */
+function sourceOf(body: Body): string {
+  const source = String(body.sourceFormat ?? "").toLowerCase();
+  if (!(source in SOURCES)) throw new HttpError(400, "bad_request", "Bu fayl turini PDF ga aylantirib bo'lmaydi");
+  return source;
+}
+
+/** 1-bosqich: fayl yuklanadigan vaqtinchalik manzilni ochadi. */
 async function start(caller: Caller, body: Body) {
-  targetOf(body);
+  const mediaType = operationOf(body) === "create" ? SOURCES[sourceOf(body)] : "application/pdf";
+  if (operationOf(body) === "export") targetOf(body);
   await requirePro(caller);
   await requireQuota(caller);
   const res = await adobe(`${ADOBE_BASE}/assets`, {
     method: "POST",
-    body: JSON.stringify({ mediaType: "application/pdf" }),
+    body: JSON.stringify({ mediaType }),
   });
   if (!res.ok) throw await adobeError(res);
   const data = await res.json();
   if (!data?.uploadUri || !data?.assetID) {
     throw new HttpError(502, "provider_error", "Adobe javobi kutilmagan ko'rinishda");
   }
-  return { uploadUri: data.uploadUri, assetID: data.assetID, mediaType: "application/pdf" };
+  return { uploadUri: data.uploadUri, assetID: data.assetID, mediaType };
 }
 
-/** 2-bosqich: yuklangan PDF ni tanlangan formatga aylantirishni boshlaydi. */
+/** 2-bosqich: yuklangan faylni aylantirishni boshlaydi. */
 async function convert(caller: Caller, body: Body) {
-  const target = targetOf(body);
+  const operation = operationOf(body);
+  // PDF dan: natija formati; PDF ga: natija har doim pdf
+  const target = operation === "export" ? targetOf(body) : "pdf";
   const assetID = String(body.assetID ?? "");
   if (!ASSET_ID.test(assetID)) throw new HttpError(400, "bad_request", "assetID noto'g'ri");
   await requirePro(caller);
   await requireQuota(caller);
 
-  const res = await adobe(`${ADOBE_BASE}/operation/exportpdf`, {
+  const path = OPERATIONS[operation];
+  const res = await adobe(`${ADOBE_BASE}/operation/${path}`, {
     method: "POST",
-    body: JSON.stringify({ assetID, targetFormat: target }),
+    body: JSON.stringify(operation === "export" ? { assetID, targetFormat: target } : { assetID }),
   });
   if (!res.ok) throw await adobeError(res);
   await res.body?.cancel();
 
-  // Javob sarlavhasidagi manzil: https://<host>/operation/exportpdf/<jobId>/status
+  // Javob sarlavhasidagi manzil: https://<host>/operation/<amal>/<jobId>/status
   const location = res.headers.get("location") ?? "";
-  const match = location.match(/^https?:\/\/([^/]+)\/operation\/exportpdf\/([^/]+)\/status/);
+  const match = location.match(/^https?:\/\/([^/]+)\/operation\/[a-z]+\/([^/]+)\/status/);
   if (!match || !allowedHost(match[1]) || !JOB_ID.test(match[2])) {
     throw new HttpError(502, "provider_error", "Adobe javobi kutilmagan ko'rinishda");
   }
@@ -208,7 +239,7 @@ async function convert(caller: Caller, body: Body) {
   });
   await logged.body?.cancel();
 
-  return { jobId: match[2], host: match[1] };
+  return { jobId: match[2], host: match[1], operation };
 }
 
 /** 3-bosqich: konvertatsiya holatini tekshiradi. */
@@ -219,7 +250,8 @@ async function status(body: Body) {
     throw new HttpError(400, "bad_request", "jobId noto'g'ri");
   }
   const protocol = host === BASE_URL.host ? BASE_URL.protocol : "https:";
-  const res = await adobe(`${protocol}//${host}/operation/exportpdf/${jobId}/status`);
+  const path = OPERATIONS[operationOf(body)];
+  const res = await adobe(`${protocol}//${host}/operation/${path}/${jobId}/status`);
   if (!res.ok) throw await adobeError(res);
   const data = await res.json();
   const state = String(data?.status ?? "").toLowerCase();
@@ -231,7 +263,7 @@ async function status(body: Body) {
   if (state === "failed") {
     return {
       status: "failed",
-      message: String(data?.error?.message ?? "Bu PDF ni aylantirib bo'lmadi"),
+      message: String(data?.error?.message ?? "Bu faylni aylantirib bo'lmadi"),
     };
   }
   return { status: "in progress" };
