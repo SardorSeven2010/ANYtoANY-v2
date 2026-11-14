@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:android_id/android_id.dart';
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config.dart';
+import '../platform.dart';
 
 /// Foydalanuvchi profili: PRO obuna holati, ishlatilgan vaqt va server bilan sinxronlash.
 class ProfileService extends ChangeNotifier {
@@ -42,12 +44,14 @@ class ProfileService extends ChangeNotifier {
 
   Future<void> load() async {
     String? androidId;
-    try {
-      androidId = await const AndroidId().getId();
-    } catch (_) {}
+    if (isAndroidApp) {
+      try {
+        androidId = await const AndroidId().getId();
+      } catch (_) {}
+    }
     final prefs = await SharedPreferences.getInstance();
 
-    deviceId = androidId ?? "unknown_device";
+    deviceId = androidId ?? (isAndroidApp ? "unknown_device" : _computerName());
     email = _client?.auth.currentUser?.email ?? prefs.getString('user_email') ?? "";
     final int localSec = prefs.getInt('total_seconds') ?? 0;
     if (localSec > totalSeconds) totalSeconds = localSec;
@@ -56,6 +60,15 @@ class ProfileService extends ChangeNotifier {
     notifyListeners();
 
     await refreshFromServer();
+  }
+
+  /// Kompyuterda qurilma ID o'rniga kompyuter nomi ishlatiladi
+  String _computerName() {
+    try {
+      return "PC: ${Platform.localHostname}";
+    } catch (_) {
+      return "PC";
+    }
   }
 
   /// Serverdagi profilni o'qiydi. Muvaffaqiyatli bo'lsa true qaytaradi.

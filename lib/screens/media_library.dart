@@ -1,18 +1,86 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 
+import '../platform.dart';
+import '../services/media_tools.dart';
 import 'player_screen.dart';
 
 enum MediaKind { video, audio }
 
+/// Kompyuterda video / audio fayllar qidiriladigan papkalar
+List<Directory> desktopMediaRoots(MediaKind kind) {
+  final home = Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'];
+  if (home == null || home.isEmpty) return [];
+  final names = kind == MediaKind.video ? ["Videos", "Downloads", "Desktop"] : ["Music", "Downloads", "Desktop"];
+  return [for (final name in names) Directory(joinPath(home, name))];
+}
+
+/// Berilgan papkalardan (ichki papkalari bilan) video yoki audio fayllarni topadi.
+/// Eng yangi fayllar birinchi keladi.
+Future<List<File>> scanMediaFiles(
+  List<Directory> roots,
+  MediaKind kind, {
+  int limit = 500,
+  int maxDepth = 4,
+}) async {
+  final found = <File>[];
+  final seen = <String>{};
+
+  Future<void> walk(Directory dir, int depth) async {
+    if (found.length >= limit) return;
+    try {
+      await for (final entity in dir.list(followLinks: false)) {
+        if (found.length >= limit) break;
+        final name = lastSegment(entity.path);
+        if (entity is File) {
+          final bool matches = kind == MediaKind.video ? isVideoFile(name) : isAudioFile(name);
+          if (matches && seen.add(entity.path)) found.add(entity);
+        } else if (entity is Directory && depth < maxDepth && !name.startsWith('.')) {
+          await walk(entity, depth + 1);
+        }
+      }
+    } catch (_) {
+      // Ochishga ruxsat bo'lmagan papkalar o'tkazib yuboriladi
+    }
+  }
+
+  for (final root in roots) {
+    if (await root.exists()) await walk(root, 0);
+  }
+
+  final modified = <String, DateTime>{};
+  for (final file in found) {
+    try {
+      modified[file.path] = (await file.stat()).modified;
+    } catch (_) {
+      modified[file.path] = DateTime.fromMillisecondsSinceEpoch(0);
+    }
+  }
+  found.sort((a, b) => modified[b.path]!.compareTo(modified[a.path]!));
+  return found;
+}
+
+/// Ro'yxatdagi bitta fayl: telefonda media kutubxonasidan, kompyuterda papkadan olinadi
+class _Entry {
+  final String title;
+  final String subtitle;
+  final AssetEntity? asset;
+  final String? path;
+  const _Entry({required this.title, required this.subtitle, this.asset, this.path});
+}
+
 // ================= VIDEO / AUDIO FAYLLAR BO'LIMI =================
-// Telefondagi video yoki audio fayllar ro'yxati. Faylni bossangiz pleyerda ochiladi.
+// Qurilmadagi video yoki audio fayllar ro'yxati. Faylni bossangiz pleyerda ochiladi.
 class MediaLibraryTab extends StatefulWidget {
   final MediaKind kind;
-  const MediaLibraryTab({super.key, required this.kind});
+
+  /// Kompyuterda qidiriladigan papkalar (ko'rsatilmasa Videos / Music / Downloads / Desktop)
+  final List<Directory>? desktopRoots;
+  const MediaLibraryTab({super.key, required this.kind, this.desktopRoots});
 
   @override
   State<MediaLibraryTab> createState() => _MediaLibraryTabState();
@@ -21,7 +89,7 @@ class MediaLibraryTab extends StatefulWidget {
 class _MediaLibraryTabState extends State<MediaLibraryTab> {
   static const int _pageSize = 80;
 
-  final List<AssetEntity> _items = [];
+  final List<_Entry> _items = [];
   final Map<String, Future<Uint8List?>> _thumbnails = {};
   AssetPathEntity? _album;
   bool _loading = true;
@@ -43,8 +111,13 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
     _init();
   }
 
-  /// Ruxsat avval berilgan bo'lsa ro'yxatni darhol yuklaydi, aks holda so'rash tugmasini ko'rsatadi
+  /// Kompyuterda papkalar darhol o'qiladi. Telefonda ruxsat avval berilgan bo'lsa
+  /// ro'yxat yuklanadi, aks holda ruxsat so'rash tugmasi ko'rsatiladi.
   Future<void> _init() async {
+    if (isDesktopApp) {
+      await _reload();
+      return;
+    }
     bool granted = false;
     try {
       granted = (await PhotoManager.getPermissionState(requestOption: _permission)).hasAccess;
@@ -83,30 +156,58 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
       _granted = true;
     });
     try {
-      final albums = await PhotoManager.getAssetPathList(
-        type: _type,
-        onlyAll: true,
-        filterOption: FilterOptionGroup(
-          videoOption: const FilterOption(needTitle: true),
-          audioOption: const FilterOption(needTitle: true),
-          orders: const [OrderOption(type: OrderOptionType.createDate, asc: false)],
-        ),
-      );
-      _album = albums.isEmpty ? null : albums.first;
       _items.clear();
       _thumbnails.clear();
       _page = 0;
       _hasMore = false;
-      await _loadPage();
+      if (isDesktopApp) {
+        await _loadFromFolders();
+      } else {
+        final albums = await PhotoManager.getAssetPathList(
+          type: _type,
+          onlyAll: true,
+          filterOption: FilterOptionGroup(
+            videoOption: const FilterOption(needTitle: true),
+            audioOption: const FilterOption(needTitle: true),
+            orders: const [OrderOption(type: OrderOptionType.createDate, asc: false)],
+          ),
+        );
+        _album = albums.isEmpty ? null : albums.first;
+        await _loadPage();
+      }
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _loadFromFolders() async {
+    final files = await scanMediaFiles(widget.desktopRoots ?? desktopMediaRoots(widget.kind), widget.kind);
+    for (final file in files) {
+      String size = "";
+      try {
+        size = "${((await file.length()) / 1024 / 1024).toStringAsFixed(1)} MB • ";
+      } catch (_) {}
+      _items.add(_Entry(
+        title: lastSegment(file.path),
+        subtitle: "$size${lastSegment(file.parent.path)}",
+        path: file.path,
+      ));
+    }
   }
 
   Future<void> _loadPage() async {
     final album = _album;
     if (album == null) return;
     final batch = await album.getAssetListPaged(page: _page, size: _pageSize);
-    _items.addAll(batch);
+    for (final asset in batch) {
+      final title = asset.title;
+      _items.add(_Entry(
+        title: (title == null || title.isEmpty) ? (_isVideo ? "Video" : "Audio") : title,
+        subtitle: _isVideo
+            ? "${_duration(asset.duration)} • ${asset.width}×${asset.height}"
+            : _duration(asset.duration),
+        asset: asset,
+      ));
+    }
     _hasMore = batch.length == _pageSize;
     _page++;
   }
@@ -129,12 +230,12 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
     );
   }
 
-  Future<void> _openAsset(AssetEntity asset) async {
+  Future<void> _open(_Entry entry) async {
     try {
-      final file = await asset.file;
+      final String? path = entry.path ?? (await entry.asset?.file)?.path;
       if (!mounted) return;
-      if (file == null) throw Exception("fayl topilmadi");
-      _play(file.path, _titleOf(asset));
+      if (path == null) throw Exception("fayl topilmadi");
+      _play(path, entry.title);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -156,11 +257,6 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
         SnackBar(content: Text("Faylni tanlab bo'lmadi: $e")),
       );
     }
-  }
-
-  String _titleOf(AssetEntity asset) {
-    final title = asset.title;
-    return (title == null || title.isEmpty) ? (_isVideo ? "Video" : "Audio") : title;
   }
 
   String _duration(int seconds) {
@@ -235,6 +331,7 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
 
   Widget _header() {
     final scheme = Theme.of(context).colorScheme;
+    final String owner = isDesktopApp ? "Kompyuteringizdagi" : "Telefoningizdagi";
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
@@ -243,7 +340,7 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
             child: Text(
               _items.isEmpty
                   ? (_isVideo ? "Video fayllar topilmadi" : "Audio fayllar topilmadi")
-                  : (_isVideo ? "Telefoningizdagi videolar" : "Telefoningizdagi audio fayllar"),
+                  : (_isVideo ? "$owner videolar" : "$owner audio fayllar"),
               style: TextStyle(fontWeight: FontWeight.bold, color: scheme.onSurface),
             ),
           ),
@@ -269,28 +366,26 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
     return const SizedBox(height: 8);
   }
 
-  Widget _tile(AssetEntity asset) {
+  Widget _tile(_Entry entry) {
     final scheme = Theme.of(context).colorScheme;
-    final String subtitle = _isVideo
-        ? "${_duration(asset.duration)} • ${asset.width}×${asset.height}"
-        : _duration(asset.duration);
+    final asset = entry.asset;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Card(
         clipBehavior: Clip.antiAlias,
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          leading: _isVideo ? _thumbnail(asset) : _audioBadge(scheme),
-          title: Text(_titleOf(asset), maxLines: 2, overflow: TextOverflow.ellipsis),
-          subtitle: Text(subtitle),
+          leading: (_isVideo && asset != null) ? _thumbnail(asset) : _badge(scheme),
+          title: Text(entry.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+          subtitle: Text(entry.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
           trailing: Icon(Icons.play_circle_fill_rounded, size: 34, color: scheme.primary),
-          onTap: () => _openAsset(asset),
+          onTap: () => _open(entry),
         ),
       ),
     );
   }
 
-  Widget _audioBadge(ColorScheme scheme) {
+  Widget _badge(ColorScheme scheme) {
     return Container(
       width: 52,
       height: 52,
@@ -302,7 +397,7 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
           colors: [scheme.primary, scheme.tertiary],
         ),
       ),
-      child: Icon(Icons.music_note_rounded, color: scheme.onPrimary),
+      child: Icon(_isVideo ? Icons.movie_rounded : Icons.music_note_rounded, color: scheme.onPrimary),
     );
   }
 

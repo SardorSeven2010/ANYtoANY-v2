@@ -9,6 +9,7 @@ import 'package:pdf_combiner/pdf_combiner.dart';
 
 import '../app_theme.dart';
 import '../config.dart';
+import '../platform.dart';
 import '../services/media_tools.dart';
 import '../services/profile_service.dart';
 import 'viewers.dart';
@@ -62,7 +63,7 @@ class _PdfMergeScreenState extends State<PdfMergeScreen> {
     try {
       // Avval ilovaning vaqtinchalik papkasida birlashtiriladi, keyin Download ga ko'chiriladi
       final tempDir = await getTemporaryDirectory();
-      tempPath = "${tempDir.path}/anytoany_merge_${DateTime.now().microsecondsSinceEpoch}.pdf";
+      tempPath = joinPath(tempDir.path, "anytoany_merge_${DateTime.now().microsecondsSinceEpoch}.pdf");
       await PdfCombiner.mergeMultiplePDFs(
         inputs: [for (final f in _files) MergeInput.path(f.path!)],
         outputPath: tempPath,

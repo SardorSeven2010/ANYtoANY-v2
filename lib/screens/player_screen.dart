@@ -1,10 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../app_theme.dart';
+import '../platform.dart';
 import '../services/media_tools.dart';
 
 // ================= VIDEO VA AUDIO PLEYER =================
@@ -109,6 +111,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  /// Kompyuterda: faylni tizimdagi odatiy pleyerda ochadi
+  Future<void> _openInSystemPlayer() async {
+    bool opened = false;
+    try {
+      opened = await launchUrl(Uri.file(widget.path));
+    } catch (_) {}
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Tizim pleyerini ochib bo'lmadi")),
+      );
+    }
+  }
+
   Widget _message(IconData icon, String text) {
     return Center(
       child: Padding(
@@ -119,6 +134,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
             Icon(icon, size: 64),
             const SizedBox(height: 12),
             Text(text, textAlign: TextAlign.center),
+            // Windows faqat o'zida o'rnatilgan kodeklarni ijro eta oladi (masalan MKV ba'zan ochilmaydi)
+            if (isDesktopApp) ...[
+              const SizedBox(height: 16),
+              FilledButton.tonalIcon(
+                onPressed: _openInSystemPlayer,
+                icon: const Icon(Icons.open_in_new_rounded),
+                label: const Text("Tizim pleyerida ochish"),
+              ),
+            ],
           ],
         ),
       ),

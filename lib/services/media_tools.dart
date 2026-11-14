@@ -7,6 +7,8 @@ import 'package:pdf/pdf.dart' as pdf;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdfx/pdfx.dart' as pdfx;
 
+import '../platform.dart';
+
 const String publicDownloadDir = '/storage/emulated/0/Download';
 
 const List<String> audioFormats = ["mp3", "wav", "aac", "m4a", "flac", "ogg"];
@@ -77,7 +79,7 @@ String extensionOf(String name) {
 
 String baseNameOf(String name) => name.replaceAll(RegExp(r'\.[^\.]+$'), '');
 
-String fileNameOf(String path) => path.split('/').last;
+String fileNameOf(String path) => lastSegment(path);
 
 bool isVideoFile(String name) => videoInputs.contains(extensionOf(name));
 bool isAudioFile(String name) => audioInputs.contains(extensionOf(name));
@@ -85,12 +87,25 @@ bool isImageFile(String name) => imageInputs.contains(extensionOf(name));
 bool isPdfFile(String name) => extensionOf(name) == "pdf";
 bool isPlayableFile(String name) => isVideoFile(name) || isAudioFile(name);
 
-/// Download papkasiga yozib bo'lmasa (Android 10 va undan eski), ilovaning o'z papkasi ishlatiladi
+/// Natijalar saqlanadigan papka.
+/// Kompyuterda: foydalanuvchining Downloads papkasi.
+/// Androidda: Download papkasi; unga yozib bo'lmasa (Android 10 va undan eski), ilovaning o'z papkasi.
 Future<Directory> resolveOutputDir() async {
+  if (!isAndroidApp) {
+    try {
+      final downloads = await getDownloadsDirectory();
+      if (downloads != null) {
+        if (!await downloads.exists()) await downloads.create(recursive: true);
+        return downloads;
+      }
+    } catch (_) {}
+    return getApplicationDocumentsDirectory();
+  }
+
   final download = Directory(publicDownloadDir);
   try {
     if (await download.exists()) {
-      final probe = File("${download.path}/anytoany_${DateTime.now().microsecondsSinceEpoch}.tmp");
+      final probe = File(joinPath(download.path, "anytoany_${DateTime.now().microsecondsSinceEpoch}.tmp"));
       await probe.writeAsString("ok", flush: true);
       await probe.delete();
       return download;
@@ -104,9 +119,9 @@ String outputDirLabel(Directory dir) =>
 
 /// Mavjud faylni ustidan yozmaslik uchun takrorlanmas nom tanlaydi
 String uniquePath(Directory dir, String baseName, String ext, Set<String> usedPaths) {
-  String path = "${dir.path}/$baseName.$ext";
+  String path = joinPath(dir.path, "$baseName.$ext");
   for (int n = 1; usedPaths.contains(path) || File(path).existsSync(); n++) {
-    path = "${dir.path}/${baseName}_$n.$ext";
+    path = joinPath(dir.path, "${baseName}_$n.$ext");
   }
   usedPaths.add(path);
   return path;
@@ -199,7 +214,7 @@ Future<String?> imageToPdf(String imagePath, String ext, String outPath) async {
   if (ext != "jpg" && ext != "jpeg") {
     // JPEG PDF ichiga qayta siqilmasdan joylanadi, boshqa rasmlar avval JPEG ga o'tkaziladi
     final tempDir = await getTemporaryDirectory();
-    tempPath = "${tempDir.path}/anytoany_${DateTime.now().microsecondsSinceEpoch}.jpg";
+    tempPath = joinPath(tempDir.path, "anytoany_${DateTime.now().microsecondsSinceEpoch}.jpg");
     final ok = await runFfmpeg(
       ["-y", "-i", imagePath, "-frames:v", "1", "-update", "1", "-q:v", "2", tempPath],
     );

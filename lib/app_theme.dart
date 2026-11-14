@@ -218,6 +218,9 @@ class ThemedBackground extends StatelessWidget {
   }
 }
 
+/// Mazmunning eng katta kengligi (kompyuterdagi keng oyna uchun)
+const double maxContentWidth = 640;
+
 /// Fon rasmli tayyor sahifa qolipi.
 class AppScaffold extends StatelessWidget {
   final PreferredSizeWidget? appBar;
@@ -234,7 +237,21 @@ class AppScaffold extends StatelessWidget {
         appBar: appBar,
         drawer: drawer,
         bottomNavigationBar: bottomNavigationBar,
-        body: SafeArea(child: body),
+        body: SafeArea(
+          // Keng oynada (kompyuter) mazmun o'rtada, telefon kengligida turadi
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth <= maxContentWidth) return body;
+              return Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: maxContentWidth),
+                  child: body,
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }

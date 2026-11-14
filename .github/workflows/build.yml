@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK va Windows EXE
 
 on:
   push:
@@ -59,3 +59,70 @@ jobs:
         with:
           name: ANYtoANY-Full-APK
           path: build/app/outputs/flutter-apk/app-release.apk
+
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Kodlarni yuklab olish
+        uses: actions/checkout@v4
+
+      - name: Flutter o'rnatish
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: 'stable'
+
+      - name: Windows papkani yaratish va ilova nomini sozlash
+        shell: bash
+        run: |
+          cp pubspec.yaml "$RUNNER_TEMP/user_pubspec.yaml"
+          cp lib/main.dart "$RUNNER_TEMP/user_main.dart"
+          flutter create --platforms=windows --org com.anytoany.converter --project-name any_to_any .
+          cp "$RUNNER_TEMP/user_pubspec.yaml" pubspec.yaml
+          cp "$RUNNER_TEMP/user_main.dart" lib/main.dart
+          # .exe nomi, oyna sarlavhasi, o'lchami va fayl ma'lumotlari
+          sed -i 's/set(BINARY_NAME "any_to_any")/set(BINARY_NAME "ANYtoANY")/' windows/CMakeLists.txt
+          sed -i 's/window.Create(L"any_to_any"/window.Create(L"ANYtoANY"/; s/Size size(1280, 720)/Size size(1100, 820)/; s/Point origin(10, 10)/Point origin(80, 40)/' windows/runner/main.cpp
+          sed -i 's/"any_to_any.exe"/"ANYtoANY.exe"/; s/"any_to_any"/"ANYtoANY"/g; s/"com.anytoany.converter"/"ANYtoANY"/; s/com.anytoany.converter\. All/ANYtoANY. All/' windows/runner/Runner.rc
+          grep -n "BINARY_NAME \"" windows/CMakeLists.txt
+          grep -n "window.Create" windows/runner/main.cpp
+
+      - name: Kutubxonalarni o'rnatish
+        run: flutter pub get
+
+      - name: Windows EXE yig'ish
+        run: flutter build windows --release
+
+      - name: Visual C++ kutubxonalarini ilova yoniga qo'shish
+        shell: pwsh
+        run: |
+          # Kompyuterda "VCRUNTIME140.dll topilmadi" xatosi chiqmasligi uchun
+          $release = "build\windows\x64\runner\Release"
+          foreach ($dll in @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")) {
+            $src = Join-Path $env:WINDIR "System32\$dll"
+            if (Test-Path $src) { Copy-Item $src $release -Force }
+          }
+          Get-ChildItem $release | Select-Object Name, Length | Format-Table -AutoSize
+
+      - name: O'rnatuvchi (Setup.exe) yaratish
+        shell: pwsh
+        run: |
+          choco upgrade innosetup -y --no-progress | Out-Null
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = (Get-Command iscc.exe -ErrorAction Stop).Source }
+          $version = ((Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value)
+          & $iscc "/DAppVersion=$version" installer\anytoany.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: O'rnatuvchini yuklashga chiqarish
+        uses: actions/upload-artifact@v4
+        with:
+          name: ANYtoANY-Windows-Setup
+          path: build/installer/ANYtoANY-Setup.exe
+
+      - name: O'rnatmasdan ishlaydigan versiyani yuklashga chiqarish
+        uses: actions/upload-artifact@v4
+        with:
+          name: ANYtoANY-Windows-Portable
+          path: build/windows/x64/runner/Release/
