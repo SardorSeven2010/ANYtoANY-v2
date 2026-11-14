@@ -89,7 +89,7 @@ void main() {
     // Liquid Glass: pastki panel va kartalar shisha
     expect(find.byType(GlassPanel), findsWidgets);
     expect(find.byType(NavigationBar), findsOneWidget);
-    expect(find.byType(NavigationDestination), findsNWidgets(3));
+    expect(find.byType(NavigationDestination), findsNWidgets(4));
     expect(tester.takeException(), isNull);
   });
 

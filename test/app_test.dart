@@ -223,10 +223,10 @@ void main() {
     for (final t in ['Video va audio', 'Video konvertor', 'Videodan audio', 'Audio konvertor', 'PDF, hujjat va rasm', 'PDF dan Word', 'Hujjatdan PDF', 'PDF birlashtirish', 'Rasm va PDF', "PDF o'qish"]) {
       expect(find.text(t), findsOneWidget, reason: t);
     }
-    // pastki qatorda 3 ta bo'lim
-    expect(find.byType(NavigationDestination), findsNWidgets(3));
+    // pastki qatorda 4 ta bo'lim
+    expect(find.byType(NavigationDestination), findsNWidgets(4));
     final labels = tester.widgetList<NavigationDestination>(find.byType(NavigationDestination)).map((d) => d.label).toList();
-    expect(labels, ['Konvertor', 'Video', 'Audio']);
+    expect(labels, ['Konvertor', 'Video', 'Audio', 'Yuklash']);
     await tester.tap(find.text('Video'));
     await settle(tester);
     expect(find.text('Video fayllar'), findsWidgets);

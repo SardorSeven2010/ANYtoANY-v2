@@ -7,6 +7,7 @@ import '../services/profile_service.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/trial_banner.dart';
 import 'converter_screen.dart';
+import 'downloader_tab.dart';
 import 'media_library.dart';
 import 'online_pdf_screen.dart';
 import 'pdf_merge_screen.dart';
@@ -24,7 +25,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
-  static const List<String> _titles = [appName, "Video fayllar", "Audio fayllar"];
+  static const List<String> _titles = [appName, "Video fayllar", "Audio fayllar", "Video yuklash"];
 
   int _tab = 0;
   // Bo'lim birinchi marta ochilgandagina yuklanadi
@@ -104,6 +105,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 selectedIcon: Icon(Icons.library_music_rounded),
                 label: "Audio",
               ),
+              NavigationDestination(
+                icon: Icon(Icons.download_outlined),
+                selectedIcon: Icon(Icons.download_rounded),
+                label: "Yuklash",
+              ),
             ],
           ),
           body: Column(
@@ -116,6 +122,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     const _ConverterTab(),
                     _opened.contains(1) ? const MediaLibraryTab(kind: MediaKind.video) : const SizedBox.shrink(),
                     _opened.contains(2) ? const MediaLibraryTab(kind: MediaKind.audio) : const SizedBox.shrink(),
+                    _opened.contains(3) ? const DownloaderTab() : const SizedBox.shrink(),
                   ],
                 ),
               ),
