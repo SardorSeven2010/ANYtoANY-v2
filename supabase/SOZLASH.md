@@ -24,6 +24,15 @@ foydalanuvchilar o'ziga PRO yoza olmaydi — buni server qoidalari (RLS) to'sadi
 
 ## 3. PRO berish
 
+PRO'ni ikki joydan berish mumkin:
+
+- **ANYtoANY Admin** ilovasi (alohida APK, `admin_app/`) — tavsiya etiladi. Admin
+  akkauntingiz emaili bilan kod orqali kirasiz. Yangi to'lov so'rovlari
+  "So'rovlar" bo'limida chiqadi va bir tugma bilan tasdiqlanadi; xato bosilsa,
+  xabardagi **Qaytarish** bilan bekor qilinadi. Ilova faqat `is_admin = true`
+  akkauntni kiritadi.
+- Asosiy ilovadagi menyu → **Admin panel**.
+
 Mijoz ilovada tarifni tanlab, kartaga pul o'tkazadi va **To'lov qildim** ni bosadi.
 Admin panelda u ro'yxatning tepasida, sariq hoshiyada chiqadi:
 
