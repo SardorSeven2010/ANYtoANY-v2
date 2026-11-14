@@ -44,7 +44,7 @@ jobs:
       - name: Testlar
         run: flutter test --exclude-tags ffmpeg
 
-      - name: Release APK yig'ish (har bir protsessor uchun alohida: kichikroq hajm)
+      - name: Release APK yig'ish (protsessor turi bo'yicha alohida, kichikroq hajm)
         run: flutter build apk --release --split-per-abi
 
       - name: APK fayllarini nomlash
