@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:any_to_any/app_theme.dart';
-import 'package:any_to_any/config.dart';
 import 'package:any_to_any/downloader/common.dart';
 import 'package:any_to_any/downloader/detected.dart';
 import 'package:any_to_any/downloader/hls.dart';
@@ -18,7 +17,6 @@ import 'package:any_to_any/services/native_bridge.dart';
 import 'package:any_to_any/services/profile_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

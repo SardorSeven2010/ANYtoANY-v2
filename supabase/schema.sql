@@ -114,7 +114,7 @@ begin
       new.trial_started_at := null;
       -- Aniq bo'lmagan qurilma nomlariga sinov berilmaydi
       if coalesce(new.android_id, '') <> ''
-         and new.android_id not in ('unknown_device', 'iPhone', 'PC')
+         and new.android_id not in ('unknown_device', 'iPhone', 'PC', 'Aniqlanmoqda...')
          and not exists (select 1 from public.trial_devices d where d.device_id = new.android_id) then
         insert into public.trial_devices (device_id, user_id) values (new.android_id, new.id);
         new.is_pro := true;

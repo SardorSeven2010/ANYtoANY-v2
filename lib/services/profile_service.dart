@@ -88,6 +88,9 @@ class ProfileService extends ChangeNotifier {
     final client = _client;
     final uid = userId;
     if (client == null || uid == null) return false;
+    // Qurilma ID'si hali aniqlanmagan bo'lsa (yangilash yuklashdan oldin chaqirilganda), kutamiz:
+    // aks holda yangi profilga noaniq ID yoziladi va bepul sinov berilmay qoladi.
+    if (deviceId == "Aniqlanmoqda...") deviceId = await deviceIdLoader();
     try {
       final row = await client.from('user_profiles').select().eq('id', uid).maybeSingle();
       if (row == null) {
