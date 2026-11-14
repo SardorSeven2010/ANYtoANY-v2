@@ -338,6 +338,12 @@ class HlsProgress {
   double get fraction => totalSegments == 0 ? 0 : doneSegments / totalSegments;
 }
 
+/// ffmpeg HLS demuxer ruxsat beradigan bo'lak kengaytmalari (allowed_segment_extensions)
+const Set<String> _segmentExtensions = {
+  '3gp', 'aac', 'avi', 'ac3', 'eac3', 'flac', 'mkv', 'm4a', 'm4s', 'm4v', 'mpg', 'mov', 'mp2', 'mp3', 'mp4',
+  'mpeg', 'mpegts', 'ogg', 'ogv', 'oga', 'ts', 'vob', 'vtt', 'wav', 'webvtt',
+};
+
 /// Media ro'yxatining hamma bo'laklarini [dir] ga yuklaydi va ffmpeg o'qiy oladigan mahalliy ro'yxat yozadi.
 /// Qaytaradi: mahalliy ro'yxat fayli.
 Future<File> downloadHlsMedia(
@@ -383,7 +389,15 @@ Future<File> downloadHlsMedia(
   }
 
   final total = media.segments.length;
-  String segName(int i) => "${name}_${i.toString().padLeft(5, '0')}.seg";
+  // Yangi ffmpeg (7.1+) bo'lak fayllarining kengaytmasini tekshiradi: faqat ma'lum kengaytmalar ruxsat etiladi.
+  // Shuning uchun asl kengaytma (ma'lum bo'lsa) saqlanadi, aks holda .ts (yoki fMP4 uchun .m4s).
+  String segName(int i) {
+    final path = media.segments[i].url.path;
+    final dot = path.lastIndexOf('.');
+    final original = dot >= 0 ? path.substring(dot + 1).toLowerCase() : '';
+    final ext = _segmentExtensions.contains(original) ? original : (initName != null ? 'm4s' : 'ts');
+    return "${name}_${i.toString().padLeft(5, '0')}.$ext";
+  }
   var next = 0;
   var done = 0;
   Object? failure;

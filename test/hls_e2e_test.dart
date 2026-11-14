@@ -107,6 +107,10 @@ void main() {
     final playlist = await downloadHlsMedia(m, Directory('${work.path}/hls'),
         parallel: 6, onBytes: (b) => bytes += b, onSegment: (d, t) => seen.add(d));
     expect(seen.last, m.segments.length);
+    // Yangi ffmpeg (7.1+) noma'lum kengaytmali bo'laklarni rad etadi (allowed_segment_extensions)
+    final names = Directory('${work.path}/hls').listSync().map((e) => e.uri.pathSegments.last).toList();
+    expect(names.where((n) => n.contains('_0')).every((n) => n.endsWith('.ts')), isTrue, reason: '$names');
+    expect(names.any((n) => n.endsWith('.seg')), isFalse);
     expect(bytes, greaterThan(10000));
     expect(server.peakConcurrent, greaterThan(1), reason: 'parts are fetched in parallel');
 
