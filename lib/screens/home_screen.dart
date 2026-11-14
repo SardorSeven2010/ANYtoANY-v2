@@ -149,10 +149,10 @@ class _ConverterTab extends StatelessWidget {
         ListenableBuilder(listenable: profile, builder: (context, _) => _statusCard(scheme)),
         const SizedBox(height: 14),
         _ToolRow(
-          icon: Icons.transform_rounded,
-          title: "Media konvertor",
-          subtitle: "Video, audio va rasm formatlari",
-          onTap: () => _open(context, const ConverterScreen(mode: ConverterMode.media)),
+          icon: Icons.movie_filter_rounded,
+          title: "Video konvertor",
+          subtitle: "Videoni boshqa format va kodekka",
+          onTap: () => _open(context, const ConverterScreen(mode: ConverterMode.video)),
         ),
         _ToolRow(
           icon: Icons.audiotrack_rounded,
@@ -161,9 +161,15 @@ class _ConverterTab extends StatelessWidget {
           onTap: () => _open(context, const ConverterScreen(mode: ConverterMode.videoToAudio)),
         ),
         _ToolRow(
+          icon: Icons.transform_rounded,
+          title: "Media konvertor",
+          subtitle: "Audio, rasm va GIF formatlari",
+          onTap: () => _open(context, const ConverterScreen(mode: ConverterMode.media)),
+        ),
+        _ToolRow(
           icon: Icons.description_rounded,
           title: "PDF dan Word",
-          subtitle: "Word, PowerPoint, Excel (onlayn)",
+          subtitle: "Word, PowerPoint, Excel",
           pro: true,
           onTap: () => _open(context, const OnlinePdfScreen()),
         ),

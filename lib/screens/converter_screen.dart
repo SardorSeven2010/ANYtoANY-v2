@@ -8,7 +8,7 @@ import '../services/profile_service.dart';
 import 'subscription_screen.dart';
 import 'viewers.dart';
 
-enum ConverterMode { media, videoToAudio, pdfImage }
+enum ConverterMode { media, video, videoToAudio, pdfImage }
 
 // ================= KONVERTOR (INTERNETSIZ) =================
 class ConverterScreen extends StatefulWidget {
@@ -28,15 +28,19 @@ class _ConverterScreenState extends State<ConverterScreen> {
   bool _isConverting = false;
   int _completedCount = 0;
   int _failedCount = 0;
+  // Foydalanuvchi formatni o'zi tanlaganmi (tanlamagan bo'lsa, fayl turiga qarab qo'yiladi)
+  bool _formatChosen = false;
 
   List<String> get _formats => switch (widget.mode) {
-        ConverterMode.media => [...audioFormats, ...videoFormats, "gif", ...imageFormats],
+        ConverterMode.media => [...videoFormats, ...audioFormats, "gif", ...imageFormats],
+        ConverterMode.video => videoFormats,
         ConverterMode.videoToAudio => audioFormats,
         ConverterMode.pdfImage => ["pdf", ...imageFormats],
       };
 
   String get _title => switch (widget.mode) {
         ConverterMode.media => "Media konvertor",
+        ConverterMode.video => "Video konvertor",
         ConverterMode.videoToAudio => "Videodan audio",
         ConverterMode.pdfImage => "PDF va rasm",
       };
@@ -44,6 +48,8 @@ class _ConverterScreenState extends State<ConverterScreen> {
   String get _hint => switch (widget.mode) {
         ConverterMode.media =>
           "Video, audio yoki rasm fayllarni tanlang.\nUlar tanlangan formatga internetsiz aylantiriladi.",
+        ConverterMode.video =>
+          "Videolarni tanlang - ular tanlangan video formatga\nva kodekka aylantiriladi.",
         ConverterMode.videoToAudio =>
           "Videolarni tanlang - ulardan ovoz ajratib olinadi\nva tanlangan audio formatda saqlanadi.",
         ConverterMode.pdfImage =>
@@ -51,7 +57,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
       };
 
   String get _pickLabel => switch (widget.mode) {
-        ConverterMode.videoToAudio => "Video tanlash",
+        ConverterMode.video || ConverterMode.videoToAudio => "Video tanlash",
         _ => "Fayl tanlash",
       };
 
@@ -63,17 +69,41 @@ class _ConverterScreenState extends State<ConverterScreen> {
   }
 
   void _onFormatChanged(String format) {
-    final bool pro = profile.proActive;
-    if (!pro && formatNeedsPro(format)) {
+    if (!profile.proActive && formatNeedsPro(format)) {
       _showProRequired("${format.toUpperCase()} formati faqat PRO obunada ochiladi.");
       return;
     }
     setState(() {
-      _targetFormat = format;
-      final available =
-          codecsFor(format).map((c) => c.value).where((c) => codecAllowed(c, pro: pro)).toList();
-      if (!available.contains(_videoCodec)) _videoCodec = available.first;
+      _formatChosen = true;
+      _applyFormat(format);
     });
+  }
+
+  /// Formatni o'rnatadi va unga mos kodekni tanlaydi (setState ichida chaqiriladi)
+  void _applyFormat(String format) {
+    final bool pro = profile.proActive;
+    _targetFormat = format;
+    final available =
+        codecsFor(format).map((c) => c.value).where((c) => codecAllowed(c, pro: pro)).toList();
+    if (available.isNotEmpty && !available.contains(_videoCodec)) _videoCodec = available.first;
+  }
+
+  /// Media konvertorda format hali tanlanmagan bo'lsa, tanlangan fayllar turiga mos format qo'yiladi:
+  /// video -> MP4, audio -> MP3, rasm -> PNG
+  String? _suggestedFormat(List<PlatformFile> files) {
+    if (widget.mode != ConverterMode.media || _formatChosen || files.isEmpty) return null;
+    if (files.every((f) => isVideoFile(f.name))) return "mp4";
+    if (files.every((f) => isAudioFile(f.name))) return "mp3";
+    if (files.every((f) => isImageFile(f.name))) return "png";
+    return null;
+  }
+
+  String _formatKind(String format) {
+    if (videoFormats.contains(format)) return "video";
+    if (audioFormats.contains(format)) return "audio";
+    if (format == "gif") return "animatsiya";
+    if (format == "pdf") return "hujjat";
+    return "rasm";
   }
 
   void _openSubscription() {
@@ -95,7 +125,9 @@ class _ConverterScreenState extends State<ConverterScreen> {
     try {
       files = switch (widget.mode) {
         ConverterMode.media => await FilePicker.pickFiles(type: FileType.any),
-        ConverterMode.videoToAudio => await FilePicker.pickFiles(type: FileType.video),
+        ConverterMode.video ||
+        ConverterMode.videoToAudio =>
+          await FilePicker.pickFiles(type: FileType.video),
         ConverterMode.pdfImage => await FilePicker.pickFiles(
             type: FileType.custom,
             allowedExtensions: ["pdf", ...imageInputs],
@@ -111,7 +143,11 @@ class _ConverterScreenState extends State<ConverterScreen> {
       _show("Bepul tarifda $freeFileLimit tagacha fayl! Ko'proq fayl uchun PRO obunani yoqing.");
       files = files.take(freeFileLimit).toList();
     }
-    setState(() => _selectedFiles = files.toList());
+    final String? suggested = _suggestedFormat(files);
+    setState(() {
+      _selectedFiles = files.toList();
+      if (suggested != null) _applyFormat(suggested);
+    });
   }
 
   Future<void> _convert() async {
@@ -217,35 +253,48 @@ class _ConverterScreenState extends State<ConverterScreen> {
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
         child: Column(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: _isConverting ? null : _pickFiles,
-                    icon: const Icon(Icons.file_present_rounded),
-                    label: Text(_pickLabel),
-                  ),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                onPressed: _isConverting ? null : _pickFiles,
+                icon: const Icon(Icons.file_present_rounded),
+                label: Text(_pickLabel),
+              ),
+            ),
+            const SizedBox(height: 12),
+            InputDecorator(
+              decoration: const InputDecoration(
+                labelText: "Qaysi formatga aylantirilsin",
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _targetFormat,
+                  isExpanded: true,
+                  isDense: true,
+                  items: _formats.map((f) {
+                    return DropdownMenuItem<String>(
+                      value: f,
+                      child: Row(
+                        children: [
+                          Text(f.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 8),
+                          Text(
+                            _formatKind(f),
+                            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+                          ),
+                          if (!pro && formatNeedsPro(f)) const _ProBadge(),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: _isConverting
+                      ? null
+                      : (v) {
+                          if (v != null) _onFormatChanged(v);
+                        },
                 ),
-                const SizedBox(width: 10),
-                _dropdownBox(
-                  DropdownButton<String>(
-                    value: _targetFormat,
-                    items: _formats
-                        .map((f) => DropdownMenuItem<String>(
-                              value: f,
-                              child: Text(
-                                !pro && formatNeedsPro(f) ? "${f.toUpperCase()} (PRO)" : f.toUpperCase(),
-                              ),
-                            ))
-                        .toList(),
-                    onChanged: _isConverting
-                        ? null
-                        : (v) {
-                            if (v != null) _onFormatChanged(v);
-                          },
-                  ),
-                ),
-              ],
+              ),
             ),
             if (isVideoTarget) ...[
               const SizedBox(height: 10),
@@ -385,19 +434,6 @@ class _ConverterScreenState extends State<ConverterScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _dropdownBox(Widget dropdown) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: scheme.surface.withValues(alpha: 0.55),
-        border: Border.all(color: scheme.primary),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: DropdownButtonHideUnderline(child: dropdown),
     );
   }
 
