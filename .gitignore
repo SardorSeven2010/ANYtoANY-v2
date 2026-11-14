@@ -33,3 +33,10 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+test/widget_test.dart

@@ -137,18 +137,8 @@ class _AuthScreenState extends State<AuthScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _logo(scheme),
-                        const SizedBox(height: 16),
-                        const Text(
-                          "ANYtoANY",
-                          style: TextStyle(
-                            fontSize: 34,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.5,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
+                        _logo(),
+                        const SizedBox(height: 14),
                         Text(
                           "Video, Audio, Kodek va PDF Konverter",
                           textAlign: TextAlign.center,
@@ -168,22 +158,25 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  Widget _logo(ColorScheme scheme) {
+  Widget _logo() {
     return Container(
-      width: 96,
-      height: 96,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFFC46B), Color(0xFFFF6B8B), Color(0xFF7B4DFF)],
-        ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
         boxShadow: [
-          BoxShadow(color: const Color(0xFFFF8F5E).withValues(alpha: 0.55), blurRadius: 28, spreadRadius: 2),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 28, offset: const Offset(0, 10)),
         ],
       ),
-      child: const Icon(Icons.transform_rounded, size: 52, color: Colors.white),
+      child: Image.asset(
+        "assets/logo.png",
+        height: 120,
+        semanticLabel: "ANYtoANY",
+        errorBuilder: (_, _, _) => const Text(
+          "ANYtoANY",
+          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Colors.black),
+        ),
+      ),
     );
   }
 

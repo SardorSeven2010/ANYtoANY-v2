@@ -1,0 +1,10 @@
+.dart_tool/
+build/
+pubspec.lock
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+# platform papkalari GitHub Actions da "flutter create" bilan yaratiladi
+android/
+ios/
+test/widget_test.dart

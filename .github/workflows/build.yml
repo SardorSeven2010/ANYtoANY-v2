@@ -1,4 +1,4 @@
-name: Build Android, Windows, Linux va iOS
+name: Build Android, Windows, Linux, iOS va Admin
 
 on:
   push:
@@ -46,10 +46,17 @@ jobs:
           sed -i 's/android:label="any_to_any"/android:label="ANYtoANY"/' android/app/src/main/AndroidManifest.xml
           # Qo'llab-quvvatlash raqamini telefon ilovasida ochish uchun (tel: havolasi)
           sed -i 's#<queries>#<queries>\n        <intent>\n            <action android:name="android.intent.action.VIEW"/>\n            <data android:scheme="tel"/>\n        </intent>\n        <intent>\n            <action android:name="android.intent.action.DIAL"/>\n            <data android:scheme="tel"/>\n        </intent>#' android/app/src/main/AndroidManifest.xml
+          # Ilova belgisi (tools/gen_logo.py bilan yaratilgan)
+          cp -r installer/icons/android/main/. android/app/src/main/res/
+          # flutter create yaratgan namuna test kerak emas
+          rm -f test/widget_test.dart
           sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET"/>\n<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>\n<uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>\n<uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>\n<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>' android/app/src/main/AndroidManifest.xml
 
       - name: Kutubxonalarni o'rnatish
         run: flutter pub get
+
+      - name: Testlar
+        run: flutter test test/app_test.dart
 
       - name: Release APK yig'ish
         run: flutter build apk --release
@@ -167,6 +174,7 @@ jobs:
           flutter create --platforms=linux --org com.anytoany.converter --project-name any_to_any .
           cp "$RUNNER_TEMP/user_pubspec.yaml" pubspec.yaml
           cp "$RUNNER_TEMP/user_main.dart" lib/main.dart
+          rm -f test/widget_test.dart
           sed -i 's/set(BINARY_NAME "any_to_any")/set(BINARY_NAME "anytoany")/' linux/CMakeLists.txt
           sed -i 's/"any_to_any"/"ANYtoANY"/g; s/gtk_window_set_default_size(window, 1280, 720)/gtk_window_set_default_size(window, 1100, 820)/' linux/runner/my_application.cc
           grep -n 'BINARY_NAME "' linux/CMakeLists.txt
@@ -174,6 +182,9 @@ jobs:
 
       - name: Kutubxonalarni o'rnatish
         run: flutter pub get
+
+      - name: Konvertatsiya testlari (tizim ffmpeg'i bilan)
+        run: flutter test test/linux_ffmpeg_test.dart
 
       - name: Linux ilovani yig'ish
         run: flutter build linux --release
@@ -250,6 +261,8 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes array" "$PL"
           /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes:0 string tel" "$PL"
           plutil -lint "$PL"
+          # Ilova belgisi (tools/gen_logo.py bilan yaratilgan)
+          cp installer/icons/ios/*.png ios/Runner/Assets.xcassets/AppIcon.appiconset/
           grep -m1 "IPHONEOS_DEPLOYMENT_TARGET" ios/Runner.xcodeproj/project.pbxproj
 
       - name: Kutubxonalarni o'rnatish
@@ -271,3 +284,50 @@ jobs:
         with:
           name: ANYtoANY-iOS-unsigned-ipa
           path: build/ios-dist/ANYtoANY-unsigned.ipa
+
+  admin:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin_app
+
+    steps:
+      - name: Kodlarni yuklab olish
+        uses: actions/checkout@v4
+
+      - name: Java 17 o'rnatish
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Flutter o'rnatish
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: 'stable'
+
+      - name: Admin ilova uchun Android papkani yaratish
+        run: |
+          cp pubspec.yaml "$RUNNER_TEMP/admin_pubspec.yaml"
+          cp lib/main.dart "$RUNNER_TEMP/admin_main.dart"
+          flutter create --platforms=android --org com.anytoany --project-name anytoany_admin .
+          cp "$RUNNER_TEMP/admin_pubspec.yaml" pubspec.yaml
+          cp "$RUNNER_TEMP/admin_main.dart" lib/main.dart
+          rm -f test/widget_test.dart
+          sed -i 's/android:label="anytoany_admin"/android:label="ANYtoANY Admin"/' android/app/src/main/AndroidManifest.xml
+          sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
+          cp -r ../installer/icons/android/admin/. android/app/src/main/res/
+          grep -n 'android:label\|uses-permission' android/app/src/main/AndroidManifest.xml
+
+      - name: Admin ilova testlari
+        run: flutter test
+
+      - name: Admin APK yig'ish
+        run: flutter build apk --release
+
+      - name: Admin APK ni yuklashga chiqarish
+        uses: actions/upload-artifact@v4
+        with:
+          name: ANYtoANY-Admin-APK
+          path: admin_app/build/app/outputs/flutter-apk/app-release.apk

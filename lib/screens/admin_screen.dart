@@ -45,11 +45,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
-  bool _isActive(Map<String, dynamic> user) {
-    if (user['is_pro'] != true) return false;
-    final until = DateTime.tryParse((user['pro_until'] ?? "").toString());
-    return until == null || until.isAfter(DateTime.now());
-  }
+  bool _isActive(Map<String, dynamic> user) => isProActive(user);
 
   Future<void> _update(Map<String, dynamic> user, Map<String, dynamic> values, String done) async {
     try {
@@ -72,23 +68,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
   /// PRO ni [months] oyga yoqadi. Obuna hali faol bo'lsa, muddat uning ustiga qo'shiladi.
   Future<void> _grant(Map<String, dynamic> user, int months) async {
-    final now = DateTime.now().toUtc();
-    final current = DateTime.tryParse((user['pro_until'] ?? "").toString())?.toUtc();
-    final base = (_isActive(user) && current != null && current.isAfter(now)) ? current : now;
-    final until = DateTime.utc(base.year, base.month + months, base.day, base.hour, base.minute);
-    await _update(
-      user,
-      {'is_pro': true, 'pro_until': until.toIso8601String(), 'payment_requested': false},
-      "PRO ${formatDate(until)} gacha yoqildi.",
-    );
+    final values = grantProValues(user, months);
+    await _update(user, values, "PRO ${formatDate(DateTime.parse(values['pro_until']))} gacha yoqildi.");
   }
 
   Future<void> _revoke(Map<String, dynamic> user) async {
-    await _update(
-      user,
-      {'is_pro': false, 'pro_until': null, 'payment_requested': false},
-      "PRO o'chirildi.",
-    );
+    await _update(user, revokeProValues, "PRO o'chirildi.");
   }
 
   @override

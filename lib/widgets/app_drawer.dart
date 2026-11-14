@@ -145,16 +145,20 @@ class AppDrawer extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: scheme.primary,
-                  child: Icon(Icons.transform_rounded, size: 32, color: scheme.onPrimary),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+                  child: Image.asset(
+                    "assets/logo.png",
+                    height: 64,
+                    semanticLabel: "ANYtoANY",
+                    errorBuilder: (_, _, _) => const Text(
+                      "ANYtoANY",
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.black),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 10),
-                const Text(
-                  "ANYtoANY",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
-                ),
                 Text(
                   profile.email.isEmpty ? "Mehmon" : profile.email,
                   maxLines: 1,
