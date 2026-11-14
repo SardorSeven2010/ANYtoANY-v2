@@ -1,3 +1,6 @@
+@Tags(['ffmpeg'])
+library;
+
 // Linux rejimida ilovaning konvertatsiya funksiyasi tizimning haqiqiy ffmpeg dasturi bilan sinaladi.
 import 'dart:io';
 

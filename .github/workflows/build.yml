@@ -25,47 +25,41 @@ jobs:
           flutter-version: '3.47.9'
           channel: 'stable'
 
-      - name: Android papkani yaratish va asl kodlarni tiklash
+      - name: Android papkani yaratish va CORE sozlamalarini qo'llash
         run: |
           cp pubspec.yaml /tmp/user_pubspec.yaml
-          if [ -f "lib/main.dart" ]; then
-            cp lib/main.dart /tmp/user_main.dart
-          elif [ -f "main.dart" ]; then
-            cp main.dart /tmp/user_main.dart
-          fi
+          cp lib/main.dart /tmp/user_main.dart
           flutter create --platforms=android --org com.anytoany.converter --project-name any_to_any .
           cp /tmp/user_pubspec.yaml pubspec.yaml
           mkdir -p lib
           cp /tmp/user_main.dart lib/main.dart
-          # minSdk 24 (ffmpeg_kit talabi): eski Groovy va yangi Kotlin DSL andozalari uchun
-          for f in android/app/build.gradle android/app/build.gradle.kts; do
-            if [ -f "$f" ]; then
-              sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/g; s/minSdk = flutter.minSdkVersion/minSdk = 24/g' "$f"
-            fi
-          done
-          sed -i 's/android:label="any_to_any"/android:label="CORE"/' android/app/src/main/AndroidManifest.xml
-          # Qo'llab-quvvatlash raqamini telefon ilovasida ochish uchun (tel: havolasi)
-          sed -i 's#<queries>#<queries>\n        <intent>\n            <action android:name="android.intent.action.VIEW"/>\n            <data android:scheme="tel"/>\n        </intent>\n        <intent>\n            <action android:name="android.intent.action.DIAL"/>\n            <data android:scheme="tel"/>\n        </intent>#' android/app/src/main/AndroidManifest.xml
-          # Ilova belgisi (tools/gen_logo.py bilan yaratilgan)
-          cp -r installer/icons/android/main/. android/app/src/main/res/
           # flutter create yaratgan namuna test kerak emas
           rm -f test/widget_test.dart
-          sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET"/>\n<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>\n<uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>\n<uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>\n<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>' android/app/src/main/AndroidManifest.xml
+          # nom, ruxsatlar, fon xizmati, PiP, Kotlin native qatlam, minSdk 24, belgilar
+          python3 installer/android/patch_project.py
 
       - name: Kutubxonalarni o'rnatish
         run: flutter pub get
 
       - name: Testlar
-        run: flutter test test/app_test.dart
+        run: flutter test --exclude-tags ffmpeg
 
-      - name: Release APK yig'ish
-        run: flutter build apk --release
+      - name: Release APK yig'ish (har bir protsessor uchun alohida: kichikroq hajm)
+        run: flutter build apk --release --split-per-abi
 
-      - name: Tayyor APK faylni yuklashga chiqarish
+      - name: APK fayllarini nomlash
+        run: |
+          mkdir -p build/apk-dist
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/apk-dist/CORE-arm64-v8a.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk build/apk-dist/CORE-armeabi-v7a.apk
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk build/apk-dist/CORE-x86_64.apk
+          ls -la build/apk-dist
+
+      - name: Tayyor APK fayllarni yuklashga chiqarish
         uses: actions/upload-artifact@v4
         with:
           name: CORE-Android-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/apk-dist/*.apk
 
   windows:
     runs-on: windows-latest
@@ -159,7 +153,7 @@ jobs:
       - name: Linux uchun kerakli dasturlar
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libjson-glib-dev patchelf xvfb ffmpeg
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libjson-glib-dev patchelf xvfb ffmpeg libmpv-dev mpv libasound2-dev
 
       - name: Flutter o'rnatish
         uses: subosito/flutter-action@v2
@@ -184,7 +178,7 @@ jobs:
         run: flutter pub get
 
       - name: Konvertatsiya testlari (tizim ffmpeg'i bilan)
-        run: flutter test test/linux_ffmpeg_test.dart
+        run: flutter test --tags ffmpeg
 
       - name: Linux ilovani yig'ish
         run: flutter build linux --release
@@ -315,10 +309,7 @@ jobs:
           cp "$RUNNER_TEMP/admin_pubspec.yaml" pubspec.yaml
           cp "$RUNNER_TEMP/admin_main.dart" lib/main.dart
           rm -f test/widget_test.dart
-          sed -i 's/android:label="anytoany_admin"/android:label="CORE Admin"/' android/app/src/main/AndroidManifest.xml
-          sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
-          cp -r ../installer/icons/android/admin/. android/app/src/main/res/
-          grep -n 'android:label\|uses-permission' android/app/src/main/AndroidManifest.xml
+          python3 ../installer/android/patch_project.py admin
 
       - name: Admin ilova testlari
         run: flutter test
