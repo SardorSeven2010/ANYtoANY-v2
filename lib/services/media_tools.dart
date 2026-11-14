@@ -119,7 +119,7 @@ Future<Directory> resolveOutputDir() async {
 }
 
 String outputDirLabel(Directory dir) => isIOSApp
-    ? "Fayllar ilovasidagi ANYtoANY papkasiga"
+    ? "Fayllar ilovasidagi CORE papkasiga"
     : _outputDirLabel(dir);
 
 String _outputDirLabel(Directory dir) =>
@@ -382,7 +382,7 @@ Future<ConvertOutcome> convertFile({
   String? audioBitrate,
 }) async {
   final ext = extensionOf(fileName);
-  final baseName = "${baseNameOf(fileName)}_ANYtoANY";
+  final baseName = "${baseNameOf(fileName)}_CORE";
 
   // FFmpeg PDF bilan ishlamaydi, shuning uchun PDF alohida aylantiriladi
   if (ext == "pdf") {

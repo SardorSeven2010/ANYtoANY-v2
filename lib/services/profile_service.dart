@@ -1,13 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:android_id/android_id.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config.dart';
-import '../platform.dart';
+import 'device_id.dart';
 
 /// Foydalanuvchi profili: PRO obuna holati, ishlatilgan vaqt va server bilan sinxronlash.
 class ProfileService extends ChangeNotifier {
@@ -19,6 +17,7 @@ class ProfileService extends ChangeNotifier {
   bool isAdmin = false;
   bool paymentRequested = false;
   String? paymentPlan;
+  DateTime? trialStartedAt;
 
   Timer? _timer;
   int _ticks = 0;
@@ -36,40 +35,52 @@ class ProfileService extends ChangeNotifier {
   /// PRO yoqilgan va muddati tugamagan bo'lsa true
   bool get proActive => isPro && (proUntil == null || proUntil!.isAfter(DateTime.now()));
 
+  /// Bepul sinov davri hozir davom etyaptimi (1 oy, yangi foydalanuvchiga)
+  bool get trialActive {
+    final started = trialStartedAt;
+    if (started == null) return false;
+    return isTrialActive({
+      'trial_started_at': started.toIso8601String(),
+      'is_pro': isPro,
+      'pro_until': proUntil?.toIso8601String(),
+    });
+  }
+
+  /// Sinov tugaguncha qolgan kun. Sinov bo'lmasa 0.
+  int get trialDaysLeft {
+    final started = trialStartedAt;
+    final until = proUntil;
+    if (!trialActive || started == null || until == null) return 0;
+    return daysLeft(until);
+  }
+
+  /// Obuna tugashiga 3 kun yoki kam qolganmi (eslatma ko'rsatish uchun)
+  bool get expiringSoon {
+    final until = proUntil;
+    if (!proActive || until == null) return false;
+    return daysLeft(until) <= 3;
+  }
+
   String get proLabel {
     if (!proActive) return "Bepul tarif";
     final until = proUntil;
+    if (trialActive && until != null) return "Bepul sinov: ${daysLeft(until)} kun qoldi";
     return until == null ? "PRO faol" : "PRO: ${formatDate(until)} gacha";
   }
 
   Future<void> load() async {
-    String? androidId;
-    if (isAndroidApp) {
-      try {
-        androidId = await const AndroidId().getId();
-      } catch (_) {}
-    }
     final prefs = await SharedPreferences.getInstance();
 
-    deviceId = androidId ??
-        (isAndroidApp ? "unknown_device" : (isIOSApp ? "iPhone" : _computerName()));
+    deviceId = await deviceIdLoader();
     email = _client?.auth.currentUser?.email ?? prefs.getString('user_email') ?? "";
     final int localSec = prefs.getInt('total_seconds') ?? 0;
     if (localSec > totalSeconds) totalSeconds = localSec;
     isPro = prefs.getBool('is_pro') ?? false;
     proUntil = DateTime.tryParse(prefs.getString('pro_until') ?? "");
+    trialStartedAt = DateTime.tryParse(prefs.getString('trial_started_at') ?? "");
     notifyListeners();
 
     await refreshFromServer();
-  }
-
-  /// Kompyuterda qurilma ID o'rniga kompyuter nomi ishlatiladi
-  String _computerName() {
-    try {
-      return "PC: ${Platform.localHostname}";
-    } catch (_) {
-      return "PC";
-    }
   }
 
   /// Serverdagi profilni o'qiydi. Muvaffaqiyatli bo'lsa true qaytaradi.
@@ -87,11 +98,18 @@ class ProfileService extends ChangeNotifier {
           'android_id': deviceId,
           'total_seconds': totalSeconds,
         });
-        isPro = false;
-        proUntil = null;
-        isAdmin = false;
-        paymentRequested = false;
-        paymentPlan = null;
+        // Yangi profilga server qoidasi 1 oylik sinov berishi mumkin: qaytadan o'qiymiz
+        final created = await client.from('user_profiles').select().eq('id', uid).maybeSingle();
+        if (created != null) {
+          _apply(created);
+        } else {
+          isPro = false;
+          proUntil = null;
+          isAdmin = false;
+          paymentRequested = false;
+          paymentPlan = null;
+          trialStartedAt = null;
+        }
       } else {
         _apply(row);
       }
@@ -111,6 +129,7 @@ class ProfileService extends ChangeNotifier {
     isAdmin = row['is_admin'] == true;
     paymentRequested = row['payment_requested'] == true;
     paymentPlan = row['payment_plan'] as String?;
+    trialStartedAt = DateTime.tryParse((row['trial_started_at'] ?? "").toString());
   }
 
   Future<void> _cache() async {
@@ -122,6 +141,12 @@ class ProfileService extends ChangeNotifier {
       await prefs.remove('pro_until');
     } else {
       await prefs.setString('pro_until', until.toIso8601String());
+    }
+    final trial = trialStartedAt;
+    if (trial == null) {
+      await prefs.remove('trial_started_at');
+    } else {
+      await prefs.setString('trial_started_at', trial.toIso8601String());
     }
   }
 
@@ -198,7 +223,7 @@ class ProfileService extends ChangeNotifier {
     } catch (_) {}
     try {
       final prefs = await SharedPreferences.getInstance();
-      for (final key in ['total_seconds', 'is_pro', 'pro_until', 'user_email', 'user_id', 'is_logged_in']) {
+      for (final key in ['total_seconds', 'is_pro', 'pro_until', 'trial_started_at', 'user_email', 'user_id', 'is_logged_in']) {
         await prefs.remove(key);
       }
     } catch (_) {}
@@ -210,6 +235,7 @@ class ProfileService extends ChangeNotifier {
     isAdmin = false;
     paymentRequested = false;
     paymentPlan = null;
+    trialStartedAt = null;
     _ticks = 0;
     notifyListeners();
   }

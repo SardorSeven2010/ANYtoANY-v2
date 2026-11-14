@@ -11,7 +11,7 @@ set -euo pipefail
 BUNDLE="$1"
 PDFIUM="$2"
 LIB="$BUNDLE/lib"
-EXE="$BUNDLE/anytoany"
+EXE="$BUNDLE/core"
 
 [ -x "$EXE" ] || { echo "Topilmadi: $EXE"; exit 1; }
 [ -f "$PDFIUM" ] || { echo "Topilmadi: $PDFIUM"; exit 1; }

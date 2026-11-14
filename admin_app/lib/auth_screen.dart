@@ -45,7 +45,7 @@ class _AdminAuthScreenState extends State<AdminAuthScreen> {
       _show("Pochtangizga kod yuborildi");
     } on AuthException catch (e) {
       _show(e.message.toLowerCase().contains("signups not allowed")
-          ? "Bu email bilan akkaunt yo'q. Avval ANYtoANY ilovasida ro'yxatdan o'ting."
+          ? "Bu email bilan akkaunt yo'q. Avval CORE ilovasida ro'yxatdan o'ting."
           : "Xatolik: ${e.message}");
     } catch (_) {
       _show("Internet bilan bog'lanib bo'lmadi");

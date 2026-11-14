@@ -85,7 +85,7 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
       final usedPaths = <String>{};
       for (int i = 0; i < files.length; i++) {
         final file = files[i];
-        final outPath = uniquePath(outDir, "${baseNameOf(file.name)}_ANYtoANY", outFormat, usedPaths);
+        final outPath = uniquePath(outDir, "${baseNameOf(file.name)}_CORE", outFormat, usedPaths);
         final String prefix = files.length > 1 ? "${i + 1}/${files.length}: " : "";
         try {
           await convertOnline(

@@ -1,7 +1,7 @@
 name: any_to_any
-description: ANYtoANY - Universal Offline Media & PDF Converter
+description: CORE - video, audio, PDF konverter, pleyer va video yuklagich
 publish_to: 'none'
-version: 1.0.0+1
+version: 2.0.0+2
 
 environment:
   sdk: '>=3.12.0 <4.0.0'
@@ -25,6 +25,7 @@ dependencies:
   url_launcher: ^6.3.3
   photo_manager: ^3.12.0
   pdf_combiner: ^6.3.0
+  device_info_plus: ^13.3.0
 
 dev_dependencies:
   flutter_test:

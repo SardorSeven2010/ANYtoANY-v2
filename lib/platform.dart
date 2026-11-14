@@ -11,6 +11,9 @@ bool get isAndroidApp => !kIsWeb && defaultTargetPlatform == TargetPlatform.andr
 /// iPhone yoki iPad
 bool get isIOSApp => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
+/// Windows kompyuter
+bool get isWindowsApp => !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+
 /// Linux kompyuter
 bool get isLinuxApp => !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 

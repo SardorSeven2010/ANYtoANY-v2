@@ -1,5 +1,10 @@
 // ================= SOZLAMALAR (SHU YERNI TO'LDIRING) =================
-// Bu fayl ikkala ilova uchun umumiy: ANYtoANY va ANYtoANY Admin.
+// Bu fayl ikkala ilova uchun umumiy: CORE va CORE Admin.
+
+/// Ilovaning nomi va versiyasi
+const String appName = "CORE";
+const String appVersion = "2.0.0";
+
 const String supabaseUrl = "https://fqswjksqlmtsiokwmsdy.supabase.co";
 const String supabaseKey = "sb_publishable_gR8RxvY6nhzN4V1ZgMilhw_xkPxvIhS";
 
@@ -28,9 +33,27 @@ class ProPlan {
 
 const List<ProPlan> proPlans = [
   ProPlan(id: "month_1", title: "1 oylik", months: 1, price: 12000),
+  ProPlan(id: "month_3", title: "3 oylik", months: 3, price: 32000),
   ProPlan(id: "month_6", title: "6 oylik", months: 6, price: 50000),
+  ProPlan(id: "month_9", title: "9 oylik", months: 9, price: 72000),
   ProPlan(id: "year_1", title: "1 yillik", months: 12, price: 100000),
 ];
+
+/// Yangi foydalanuvchiga beriladigan bepul sinov muddati (oy). Serverda ham shu qiymat (schema.sql)
+const int trialMonths = 1;
+
+// ================= VIDEO YUKLASH (DOWNLOADER) CHEKLOVLARI =================
+
+/// Bepul tarifda 7 kun ichida yuklash mumkin bo'lgan videolar soni. PRO'da cheklov yo'q.
+const int freeWeeklyDownloads = 10;
+
+/// Bitta videoni nechta parallel bo'lakka bo'lib yuklash: bepul tarifda eng ko'pi 6, PRO'da 18
+const int freeMaxSegments = 6;
+const int proMaxSegments = 18;
+
+/// Odatiy bo'laklar soni
+const int freeDefaultSegments = 6;
+const int proDefaultSegments = 12;
 // =====================================================================
 
 ProPlan? planById(String? id) {
@@ -101,3 +124,71 @@ const Map<String, dynamic> revokeProValues = {
   'pro_until': null,
   'payment_requested': false,
 };
+
+// ================= BEPUL SINOV =================
+
+/// Profil qatori bo'yicha sinov tugaydigan vaqt (sinov berilmagan bo'lsa null)
+DateTime? trialEndsAt(Map<String, dynamic> row) {
+  final started = DateTime.tryParse((row['trial_started_at'] ?? "").toString());
+  return started == null ? null : addMonths(started, trialMonths);
+}
+
+/// Hozir bepul sinov davri davom etyaptimi (PRO faol va sinov muddatidan oshmagan)
+bool isTrialActive(Map<String, dynamic> row, {DateTime? now}) {
+  final end = trialEndsAt(row);
+  final current = now ?? DateTime.now();
+  return end != null && end.isAfter(current) && isProActive(row, now: current);
+}
+
+/// Sinov yoki obunaning tugashigacha qolgan to'liq kunlar (tugagan bo'lsa 0)
+int daysLeft(DateTime until, {DateTime? now}) {
+  final diff = until.difference(now ?? DateTime.now());
+  if (diff.isNegative) return 0;
+  return (diff.inHours / 24).ceil();
+}
+
+// ================= YUKLASH LIMITLARI =================
+
+/// Foydalanuvchi uchun yuklash qoidalari (bepul / PRO)
+class DownloadLimits {
+  final bool pro;
+  const DownloadLimits({required this.pro});
+
+  int get maxSegments => pro ? proMaxSegments : freeMaxSegments;
+  int get defaultSegments => pro ? proDefaultSegments : freeDefaultSegments;
+
+  /// Bepul tarifda haftasiga nechta; PRO'da null (cheklanmagan)
+  int? get weeklyLimit => pro ? null : freeWeeklyDownloads;
+
+  /// Bo'laklar sonini ruxsat etilgan oraliqqa keltiradi
+  int clampSegments(int value) => value < 1 ? 1 : (value > maxSegments ? maxSegments : value);
+
+  /// Oxirgi 7 kunda boshlangan yuklashlar soni
+  static int usedInWeek(Iterable<DateTime> starts, {DateTime? now}) {
+    final current = (now ?? DateTime.now());
+    final from = current.subtract(const Duration(days: 7));
+    return starts.where((t) => t.isAfter(from) && !t.isAfter(current)).length;
+  }
+
+  /// Yana nechta video yuklash mumkin (PRO'da null)
+  int? remaining(Iterable<DateTime> starts, {DateTime? now}) {
+    final limit = weeklyLimit;
+    if (limit == null) return null;
+    final left = limit - usedInWeek(starts, now: now);
+    return left < 0 ? 0 : left;
+  }
+
+  bool canStart(Iterable<DateTime> starts, {DateTime? now}) {
+    final left = remaining(starts, now: now);
+    return left == null || left > 0;
+  }
+
+  /// Limit qachon bo'shaydi: eng eski hisobga olingan yuklashdan 7 kun keyin
+  DateTime? nextSlotAt(Iterable<DateTime> starts, {DateTime? now}) {
+    if (canStart(starts, now: now)) return null;
+    final current = now ?? DateTime.now();
+    final from = current.subtract(const Duration(days: 7));
+    final inWindow = starts.where((t) => t.isAfter(from)).toList()..sort();
+    return inWindow.isEmpty ? null : inWindow.first.add(const Duration(days: 7));
+  }
+}

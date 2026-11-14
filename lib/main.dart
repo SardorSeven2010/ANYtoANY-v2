@@ -26,12 +26,12 @@ void main() async {
     isLoggedIn = Supabase.instance.client.auth.currentSession != null;
   } catch (_) {}
 
-  runApp(AnyToAnyApp(isLoggedIn: isLoggedIn));
+  runApp(CoreApp(isLoggedIn: isLoggedIn));
 }
 
-class AnyToAnyApp extends StatelessWidget {
+class CoreApp extends StatelessWidget {
   final bool isLoggedIn;
-  const AnyToAnyApp({super.key, required this.isLoggedIn});
+  const CoreApp({super.key, required this.isLoggedIn});
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +39,7 @@ class AnyToAnyApp extends StatelessWidget {
       listenable: themeController,
       builder: (context, _) => MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'ANYtoANY',
+        title: appName,
         theme: buildAppTheme(themeController.current),
         home: isLoggedIn ? const HomeScreen() : const AuthScreen(),
       ),

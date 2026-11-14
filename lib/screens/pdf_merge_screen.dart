@@ -70,7 +70,7 @@ class _PdfMergeScreenState extends State<PdfMergeScreen> {
       );
 
       final outDir = await resolveOutputDir();
-      final outPath = uniquePath(outDir, "Birlashtirilgan_ANYtoANY", "pdf", <String>{});
+      final outPath = uniquePath(outDir, "Birlashtirilgan_CORE", "pdf", <String>{});
       await File(tempPath).copy(outPath);
       if (mounted) {
         setState(() {

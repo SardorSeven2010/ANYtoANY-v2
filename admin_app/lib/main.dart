@@ -6,7 +6,7 @@ import 'auth_screen.dart';
 import 'home_screen.dart';
 import 'repository.dart';
 
-// ANYtoANY Admin: to'lov so'rovlarini tasdiqlash, PRO berish va foydalanuvchilarni kuzatish.
+// CORE Admin: to'lov so'rovlarini tasdiqlash, PRO berish va foydalanuvchilarni kuzatish.
 // Sozlamalar (Supabase, tariflar) asosiy ilova bilan umumiy: packages/anytoany_core
 
 void main() async {
@@ -54,7 +54,7 @@ class AdminApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'ANYtoANY Admin',
+      title: 'CORE Admin',
       theme: adminTheme(),
       home: signedIn ? AdminGate(repository: repository) : AdminAuthScreen(repository: repository),
     );

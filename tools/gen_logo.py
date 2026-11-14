@@ -1,9 +1,9 @@
-"""ANYtoANY logotipi va ilova belgilari (foydalanuvchi bergan dizayn asosida, yuqori o'lchamda).
+"""CORE logotipi va ilova belgilari (uch rangli pog'onali dizayn: CO - qizil, R - sariq, E - yashil).
 
 Foydalanish: python3 tools/gen_logo.py <repo papkasi>
 Yaratadi:
   assets/logo.png, admin_app/assets/... - ilovalar ichida (shaffof fon)
-  installer/anytoany.png / .ico         - Linux va Windows belgisi
+  installer/core.png / .ico             - Linux va Windows belgisi
   installer/icons/android/...           - Android ilova belgilari (asosiy va admin)
   installer/icons/ios/...               - iPhone ilova belgilari
 """
@@ -24,7 +24,7 @@ K = 8  # asl rasm (367x261) koordinatalari shu barobar kattalashtiriladi
 
 
 def logo():
-    """Shaffof fondagi logotip: qizil ANY, sariq to, yashil ANY."""
+    """Shaffof fondagi logotip: qizil CO, sariq R, yashil E."""
     W, H = 370 * K, 262 * K
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -32,25 +32,25 @@ def logo():
     def box(x0, y0, x1, y1, fill, r=13):
         d.rounded_rectangle([x0 * K, y0 * K, x1 * K, y1 * K], radius=r * K, fill=fill)
 
-    def text(x0, x1, cy, s, fill, font=FONT_BOLD):
-        """Yozuvni asl rasmdagi kengligiga (x0..x1) moslab, cy balandlik markazida chizadi."""
+    def text(bx, s, fill, font=FONT_BOLD, fill_w=0.80, fill_h=0.64):
+        """Yozuvni qutiga (bx = x0, y0, x1, y1) sig'diradi va o'rtasiga joylaydi."""
+        x0, y0, x1, y1 = bx
         size = 100 * K
         f = ImageFont.truetype(font, size)
         left, top, right, bottom = d.textbbox((0, 0), s, font=f)
-        size = int(size * (x1 - x0) * K / (right - left))
-        f = ImageFont.truetype(font, size)
+        scale = min((x1 - x0) * K * fill_w / (right - left), (y1 - y0) * K * fill_h / (bottom - top))
+        f = ImageFont.truetype(font, int(size * scale))
         left, top, right, bottom = d.textbbox((0, 0), s, font=f)
-        x = x0 * K - left
-        y = cy * K - (top + bottom) / 2
-        d.text((x, y), s, font=f, fill=fill)
+        cx, cy = (x0 + x1) / 2 * K, (y0 + y1) / 2 * K
+        d.text((cx - (left + right) / 2, cy - (top + bottom) / 2), s, font=f, fill=fill)
 
-    box(4, 4, 134, 84, RED)
-    box(113, 53, 207, 169, YELLOW)
-    box(180, 141, 367, 258, GREEN)
-    # kengliklar va markazlar asl rasmdagi o'lchovlardan olingan
-    text(10, 129, 45.5, "ANY", WHITE)
-    text(122, 195, 115.5, "to", BLACK)
-    text(189, 361, 202, "ANY", WHITE)
+    boxes = {"CO": (4, 4, 134, 84), "R": (113, 53, 207, 169), "E": (180, 141, 367, 258)}
+    box(*boxes["CO"], RED)
+    box(*boxes["R"], YELLOW)
+    box(*boxes["E"], GREEN)
+    text(boxes["CO"], "CO", WHITE)
+    text(boxes["R"], "R", BLACK, fill_w=0.62, fill_h=0.52)
+    text(boxes["E"], "E", WHITE, fill_w=0.5, fill_h=0.64)
     return img.crop(img.getbbox())
 
 
@@ -81,9 +81,9 @@ def main(repo):
     os.makedirs(f"{repo}/admin_app/assets", exist_ok=True)
     small.save(f"{repo}/admin_app/assets/logo.png", optimize=True)
 
-    square_icon(512, lg).save(f"{repo}/installer/anytoany.png", optimize=True)
+    square_icon(512, lg).save(f"{repo}/installer/core.png", optimize=True)
     square_icon(256, lg).save(
-        f"{repo}/installer/anytoany.ico",
+        f"{repo}/installer/core.ico",
         sizes=[(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)],
     )
 

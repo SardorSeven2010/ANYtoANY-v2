@@ -101,8 +101,10 @@ void main() {
 
   group('logic', () {
     test('prices and formatting', () {
-      expect(proPlans.map((p) => p.priceLabel).toList(), ["12 000 so'm", "50 000 so'm", "100 000 so'm"]);
-      expect(proPlans.map((p) => p.months).toList(), [1, 6, 12]);
+      expect(proPlans.map((p) => p.priceLabel).toList(), ["12 000 so'm", "32 000 so'm", "50 000 so'm", "72 000 so'm", "100 000 so'm"]);
+      expect(proPlans.map((p) => p.months).toList(), [1, 3, 6, 9, 12]);
+      expect(planById('month_3')!.price, 32000);
+      expect(planById('month_9')!.price, 72000);
       expect(formatSom(999), "999 so'm");
       expect(formatSom(1234567), "1 234 567 so'm");
       expect(planById('month_6')!.price, 50000);
@@ -196,7 +198,7 @@ void main() {
 
   testWidgets('login screen', (tester) async {
     phone(tester);
-    await tester.pumpWidget(const AnyToAnyApp(isLoggedIn: false));
+    await tester.pumpWidget(const CoreApp(isLoggedIn: false));
     await settle(tester);
     expect(find.text("Kirish yoki ro'yxatdan o'tish"), findsOneWidget);
     expect(find.text('Tasdiqlash kodini olish'), findsOneWidget);
@@ -215,7 +217,7 @@ void main() {
     final launcher = FakeLauncher();
     UrlLauncherPlatform.instance = launcher;
 
-    await tester.pumpWidget(const AnyToAnyApp(isLoggedIn: true));
+    await tester.pumpWidget(const CoreApp(isLoggedIn: true));
     await settle(tester);
     for (final t in ['Video va audio', 'Video konvertor', 'Videodan audio', 'Audio konvertor', 'PDF, hujjat va rasm', 'PDF dan Word', 'Hujjatdan PDF', 'PDF birlashtirish', 'Rasm va PDF', "PDF o'qish"]) {
       expect(find.text(t), findsOneWidget, reason: t);
@@ -305,7 +307,7 @@ void main() {
 
   testWidgets('admin entry appears only for admin', (tester) async {
     phone(tester);
-    await tester.pumpWidget(const AnyToAnyApp(isLoggedIn: true));
+    await tester.pumpWidget(const CoreApp(isLoggedIn: true));
     await settle(tester);
     profile.isAdmin = true;
     await tester.tap(find.byTooltip('Open navigation menu'));
@@ -499,18 +501,20 @@ void main() {
 
   testWidgets('subscription plans', (tester) async {
     // baland ekran: ro'yxatning hammasi birdan chiziladi, surish kerak emas
-    tester.view.physicalSize = const Size(1080, 6000);
+    tester.view.physicalSize = const Size(1080, 9000);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(MaterialApp(theme: buildAppTheme(appThemes.first), home: const SubscriptionScreen()));
     await settle(tester);
     expect(find.text('Bepul tarif'), findsOneWidget);
-    for (final t in ['1 oylik', "12 000 so'm", '6 oylik', "50 000 so'm", '1 yillik', "100 000 so'm"]) {
+    for (final t in ['1 oylik', "12 000 so'm", '3 oylik', "32 000 so'm", '6 oylik', "50 000 so'm", '9 oylik', "72 000 so'm", '1 yillik', "100 000 so'm"]) {
       expect(find.text(t), findsOneWidget, reason: t);
     }
     expect(find.textContaining('Umrbod'), findsNothing);
     expect(find.textContaining('Barcha video kodeklar'), findsOneWidget);
     expect(find.textContaining('Word, PowerPoint va Excel'), findsOneWidget);
+    expect(find.text("Oyiga 10 667 so'm\n4 000 so'm tejaysiz"), findsOneWidget); // 3 oy: 36 000 o'rniga 32 000
+    expect(find.text("Oyiga 8 000 so'm\n36 000 so'm tejaysiz"), findsOneWidget); // 9 oy: 108 000 o'rniga 72 000
     expect(find.text("Oyiga 8 333 so'm\n22 000 so'm tejaysiz"), findsOneWidget); // 6 oy: 72 000 o'rniga 50 000
     expect(find.text("Oyiga 8 333 so'm\n44 000 so'm tejaysiz"), findsOneWidget); // 1 yil: 144 000 o'rniga 100 000
     expect(find.text("To'lov: 1 oylik tarif — 12 000 so'm"), findsOneWidget);

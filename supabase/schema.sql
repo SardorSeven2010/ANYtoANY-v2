@@ -1,5 +1,5 @@
 -- =====================================================================
--- ANYtoANY: Supabase bazasi
+-- CORE: Supabase bazasi
 --
 -- Qanday ishlatiladi: Supabase -> SQL Editor -> shu faylning hammasini
 -- nusxalab qo'ying -> "Run". Qayta ishga tushirsangiz ham zarari yo'q.
@@ -9,6 +9,7 @@
 -- =====================================================================
 
 -- ---------- Foydalanuvchi profillari ----------
+-- Yangi foydalanuvchiga 1 oy tekin PRO (bepul sinov) beriladi: bir qurilmaga bir marta.
 create table if not exists public.user_profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   email text,
@@ -20,6 +21,7 @@ create table if not exists public.user_profiles (
   payment_info text,
   payment_plan text,
   is_admin boolean not null default false,
+  trial_started_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -34,6 +36,7 @@ alter table public.user_profiles add column if not exists payment_requested bool
 alter table public.user_profiles add column if not exists payment_info text;
 alter table public.user_profiles add column if not exists payment_plan text;
 alter table public.user_profiles add column if not exists is_admin boolean not null default false;
+alter table public.user_profiles add column if not exists trial_started_at timestamptz;
 alter table public.user_profiles add column if not exists created_at timestamptz not null default now();
 alter table public.user_profiles add column if not exists updated_at timestamptz not null default now();
 
@@ -80,8 +83,18 @@ create policy "profile_update" on public.user_profiles
   using (id = auth.uid() or public.is_admin())
   with check (id = auth.uid() or public.is_admin());
 
+-- Bepul sinov berilgan qurilmalar. Faqat trigger (security definer) yozadi va o'qiydi:
+-- jadvalda siyosat yo'q, shuning uchun ilovalar unga bevosita tegolmaydi.
+create table if not exists public.trial_devices (
+  device_id text primary key,
+  user_id uuid references auth.users (id) on delete set null,
+  granted_at timestamptz not null default now()
+);
+alter table public.trial_devices enable row level security;
+
 -- Oddiy foydalanuvchi o'ziga PRO yoki admin huquqini yoza olmaydi:
 -- is_pro, pro_until va is_admin ni faqat admin (yoki Supabase paneli) o'zgartiradi.
+-- Yagona istisno: yangi profil yaratilganda qurilma birinchi marta ko'rilsa, 1 oylik sinov beriladi.
 create or replace function public.protect_profile_columns()
 returns trigger
 language plpgsql
@@ -98,10 +111,21 @@ begin
       new.is_pro := false;
       new.pro_until := null;
       new.is_admin := false;
+      new.trial_started_at := null;
+      -- Aniq bo'lmagan qurilma nomlariga sinov berilmaydi
+      if coalesce(new.android_id, '') <> ''
+         and new.android_id not in ('unknown_device', 'iPhone', 'PC')
+         and not exists (select 1 from public.trial_devices d where d.device_id = new.android_id) then
+        insert into public.trial_devices (device_id, user_id) values (new.android_id, new.id);
+        new.is_pro := true;
+        new.pro_until := now() + make_interval(months => 1);
+        new.trial_started_at := now();
+      end if;
     else
       new.is_pro := old.is_pro;
       new.pro_until := old.pro_until;
       new.is_admin := old.is_admin;
+      new.trial_started_at := old.trial_started_at;
     end if;
   end if;
   new.updated_at := now();
@@ -135,5 +159,31 @@ create policy "log_select" on public.conversion_log
   using (user_id = auth.uid() or public.is_admin());
 
 create policy "log_insert" on public.conversion_log
+  for insert to authenticated
+  with check (user_id = auth.uid());
+
+-- ---------- Video yuklash jurnali (haftalik limit uchun) ----------
+create table if not exists public.download_log (
+  id bigint generated always as identity primary key,
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  host text,
+  kind text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists download_log_user_time
+  on public.download_log (user_id, created_at desc);
+
+alter table public.download_log enable row level security;
+grant select, insert on public.download_log to authenticated;
+
+drop policy if exists "dl_select" on public.download_log;
+drop policy if exists "dl_insert" on public.download_log;
+
+create policy "dl_select" on public.download_log
+  for select to authenticated
+  using (user_id = auth.uid() or public.is_admin());
+
+create policy "dl_insert" on public.download_log
   for insert to authenticated
   with check (user_id = auth.uid());

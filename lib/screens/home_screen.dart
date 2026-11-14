@@ -2,8 +2,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import '../config.dart';
 import '../services/profile_service.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/trial_banner.dart';
 import 'converter_screen.dart';
 import 'media_library.dart';
 import 'online_pdf_screen.dart';
@@ -21,7 +23,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
-  static const List<String> _titles = ["ANYtoANY", "Video fayllar", "Audio fayllar"];
+  static const List<String> _titles = [appName, "Video fayllar", "Audio fayllar"];
 
   int _tab = 0;
   // Bo'lim birinchi marta ochilgandagina yuklanadi
@@ -103,12 +105,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
-          body: IndexedStack(
-            index: _tab,
+          body: Column(
             children: [
-              const _ConverterTab(),
-              _opened.contains(1) ? const MediaLibraryTab(kind: MediaKind.video) : const SizedBox.shrink(),
-              _opened.contains(2) ? const MediaLibraryTab(kind: MediaKind.audio) : const SizedBox.shrink(),
+              TrialBanner(onTap: () => _open(const SubscriptionScreen())),
+              Expanded(
+                child: IndexedStack(
+                  index: _tab,
+                  children: [
+                    const _ConverterTab(),
+                    _opened.contains(1) ? const MediaLibraryTab(kind: MediaKind.video) : const SizedBox.shrink(),
+                    _opened.contains(2) ? const MediaLibraryTab(kind: MediaKind.audio) : const SizedBox.shrink(),
+                  ],
+                ),
+              ),
             ],
           ),
         );

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config.dart';
 import 'home_screen.dart';
 
 // ================= KIRISH VA RO'YXATDAN O'TISH OYNASI (EMAIL OTP) =================
@@ -171,9 +172,9 @@ class _AuthScreenState extends State<AuthScreen> {
       child: Image.asset(
         "assets/logo.png",
         height: 120,
-        semanticLabel: "ANYtoANY",
+        semanticLabel: appName,
         errorBuilder: (_, _, _) => const Text(
-          "ANYtoANY",
+          appName,
           style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Colors.black),
         ),
       ),

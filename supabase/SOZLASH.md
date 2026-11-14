@@ -1,4 +1,4 @@
-# ANYtoANY: Supabase sozlamalari
+# CORE: Supabase sozlamalari
 
 Ilova to'liq ishlashi uchun Supabase'da quyidagilarni bir marta bajarish kerak.
 
@@ -10,7 +10,19 @@ PRO obuna, to'lov so'rovi va admin panel shu jadvallar bilan ishlaydi.
 2. [`schema.sql`](schema.sql) faylining hammasini nusxalab qo'ying.
 3. **Run** ni bosing.
 
-Skriptni qayta ishga tushirsangiz ham zarari yo'q.
+Skriptni qayta ishga tushirsangiz ham zarari yo'q. **CORE 2.0** yangilanishida
+(bepul sinov va yuklash jurnali jadvallari qo'shildi) uni bir marta qayta ishga tushirish shart.
+
+### Bepul sinov (1 oy)
+
+Yangi akkaunt birinchi marta kirganda server unga **1 oylik PRO** beradi. Sinov
+**bir qurilmaga bir marta** beriladi: shu qurilmadan keyin ochilgan boshqa
+akkauntlarga sinov berilmaydi (qurilmalar `trial_devices` jadvalida saqlanadi,
+ilova unga bevosita tegolmaydi). Sinov muddati ilovadan o'zgartirib bo'lmaydi.
+Qurilmasi noaniq akkauntlarga sinov berilmaydi.
+
+PRO **akkauntga** (emailga) bog'liq: boshqa telefon yoki kompyuterda shu email
+bilan kirilsa, o'sha yerda ham PRO ishlaydi.
 
 ## 2. O'zingizni admin qilish
 
@@ -26,7 +38,7 @@ foydalanuvchilar o'ziga PRO yoza olmaydi — buni server qoidalari (RLS) to'sadi
 
 PRO'ni ikki joydan berish mumkin:
 
-- **ANYtoANY Admin** ilovasi (alohida APK, `admin_app/`) — tavsiya etiladi. Admin
+- **CORE Admin** ilovasi (alohida APK, `admin_app/`) — tavsiya etiladi. Admin
   akkauntingiz emaili bilan kod orqali kirasiz. Yangi to'lov so'rovlari
   "So'rovlar" bo'limida chiqadi va bir tugma bilan tasdiqlanadi; xato bosilsa,
   xabardagi **Qaytarish** bilan bekor qilinadi. Ilova faqat `is_admin = true`
@@ -36,15 +48,23 @@ PRO'ni ikki joydan berish mumkin:
 Mijoz ilovada tarifni tanlab, kartaga pul o'tkazadi va **To'lov qildim** ni bosadi.
 Admin panelda u ro'yxatning tepasida, sariq hoshiyada chiqadi:
 
-- **+1 oylik / +6 oylik / +1 yillik** — PRO'ni shu muddatga yoqadi. Obuna hali
+- **+1 / +3 / +6 / +9 oylik va +1 yillik** — PRO'ni shu muddatga yoqadi. Obuna hali
   tugamagan bo'lsa, muddat ustiga qo'shiladi.
 - **PRO o'chirish** — obunani bekor qiladi.
 
 Muddat tugagach PRO o'zi o'chadi.
 
+Tariflar: 1 oy 12 000, 3 oy 32 000, 6 oy 50 000, 9 oy 72 000, 1 yil 100 000 so'm
+(`packages/anytoany_core/lib/anytoany_core.dart` ichidagi `proPlans`).
+
 PRO nima beradi: barcha video kodeklar (bepul tarifda faqat H.264), PDF ni
 Word / PowerPoint / Excel ga va hujjatlarni PDF ga aylantirish, cheklanmagan
-sondagi fayl (bepul tarifda bir martada 3 ta).
+sondagi fayl (bepul tarifda bir martada 3 ta), haftasiga cheklanmagan video
+yuklash va 18 tagacha bo'lakka bo'lib yuklash, yuklanayotgan videoni H.264 yoki
+H.265 tanlab saqlash, ilova nomini o'zgartirish.
+
+Bepul tarifda: haftasiga 10 ta video yuklash, 6 tagacha bo'lak. Hisob `download_log`
+jadvalida yuritiladi.
 
 ## 4. Hujjatlarni internet orqali aylantirish (ixtiyoriy)
 

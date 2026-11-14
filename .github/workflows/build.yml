@@ -25,7 +25,7 @@ jobs:
           flutter-version: '3.47.9'
           channel: 'stable'
 
-      - name: Android papkani yaratish va asl ANYtoANY kodlarini tiklash
+      - name: Android papkani yaratish va asl kodlarni tiklash
         run: |
           cp pubspec.yaml /tmp/user_pubspec.yaml
           if [ -f "lib/main.dart" ]; then
@@ -43,7 +43,7 @@ jobs:
               sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/g; s/minSdk = flutter.minSdkVersion/minSdk = 24/g' "$f"
             fi
           done
-          sed -i 's/android:label="any_to_any"/android:label="ANYtoANY"/' android/app/src/main/AndroidManifest.xml
+          sed -i 's/android:label="any_to_any"/android:label="CORE"/' android/app/src/main/AndroidManifest.xml
           # Qo'llab-quvvatlash raqamini telefon ilovasida ochish uchun (tel: havolasi)
           sed -i 's#<queries>#<queries>\n        <intent>\n            <action android:name="android.intent.action.VIEW"/>\n            <data android:scheme="tel"/>\n        </intent>\n        <intent>\n            <action android:name="android.intent.action.DIAL"/>\n            <data android:scheme="tel"/>\n        </intent>#' android/app/src/main/AndroidManifest.xml
           # Ilova belgisi (tools/gen_logo.py bilan yaratilgan)
@@ -64,7 +64,7 @@ jobs:
       - name: Tayyor APK faylni yuklashga chiqarish
         uses: actions/upload-artifact@v4
         with:
-          name: ANYtoANY-Full-APK
+          name: CORE-Android-APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
   windows:
@@ -89,10 +89,10 @@ jobs:
           cp "$RUNNER_TEMP/user_pubspec.yaml" pubspec.yaml
           cp "$RUNNER_TEMP/user_main.dart" lib/main.dart
           # .exe nomi, oyna sarlavhasi, o'lchami va fayl ma'lumotlari
-          sed -i 's/set(BINARY_NAME "any_to_any")/set(BINARY_NAME "ANYtoANY")/' windows/CMakeLists.txt
-          sed -i 's/window.Create(L"any_to_any"/window.Create(L"ANYtoANY"/; s/Size size(1280, 720)/Size size(1100, 820)/; s/Point origin(10, 10)/Point origin(80, 40)/' windows/runner/main.cpp
-          sed -i 's/"any_to_any.exe"/"ANYtoANY.exe"/; s/"any_to_any"/"ANYtoANY"/g; s/"com.anytoany.converter"/"ANYtoANY"/; s/com.anytoany.converter\. All/ANYtoANY. All/' windows/runner/Runner.rc
-          cp installer/anytoany.ico windows/runner/resources/app_icon.ico
+          sed -i 's/set(BINARY_NAME "any_to_any")/set(BINARY_NAME "CORE")/' windows/CMakeLists.txt
+          sed -i 's/window.Create(L"any_to_any"/window.Create(L"CORE"/; s/Size size(1280, 720)/Size size(1100, 820)/; s/Point origin(10, 10)/Point origin(80, 40)/' windows/runner/main.cpp
+          sed -i 's/"any_to_any.exe"/"CORE.exe"/; s/"any_to_any"/"CORE"/g; s/"com.anytoany.converter"/"CORE"/; s/com.anytoany.converter\. All/CORE. All/' windows/runner/Runner.rc
+          cp installer/core.ico windows/runner/resources/app_icon.ico
           grep -n "BINARY_NAME \"" windows/CMakeLists.txt
           grep -n "window.Create" windows/runner/main.cpp
 
@@ -117,7 +117,7 @@ jobs:
         shell: pwsh
         run: |
           # Hamma DLL'lar topilishi va ilova ochilib turishini tekshiradi
-          $exe = "build\windows\x64\runner\Release\ANYtoANY.exe"
+          $exe = "build\windows\x64\runner\Release\CORE.exe"
           $p = Start-Process -FilePath $exe -PassThru
           Start-Sleep -Seconds 25
           if ($p.HasExited) {
@@ -134,19 +134,19 @@ jobs:
           $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { $iscc = (Get-Command iscc.exe -ErrorAction Stop).Source }
           $version = ((Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value)
-          & $iscc "/DAppVersion=$version" installer\anytoany.iss
+          & $iscc "/DAppVersion=$version" installer\core.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: O'rnatuvchini yuklashga chiqarish
         uses: actions/upload-artifact@v4
         with:
-          name: ANYtoANY-Windows-Setup
-          path: build/installer/ANYtoANY-Setup.exe
+          name: CORE-Windows-Setup
+          path: build/installer/CORE-Setup.exe
 
       - name: O'rnatmasdan ishlaydigan versiyani yuklashga chiqarish
         uses: actions/upload-artifact@v4
         with:
-          name: ANYtoANY-Windows-Portable
+          name: CORE-Windows-Portable
           path: build/windows/x64/runner/Release/
 
   linux:
@@ -175,10 +175,10 @@ jobs:
           cp "$RUNNER_TEMP/user_pubspec.yaml" pubspec.yaml
           cp "$RUNNER_TEMP/user_main.dart" lib/main.dart
           rm -f test/widget_test.dart
-          sed -i 's/set(BINARY_NAME "any_to_any")/set(BINARY_NAME "anytoany")/' linux/CMakeLists.txt
-          sed -i 's/"any_to_any"/"ANYtoANY"/g; s/gtk_window_set_default_size(window, 1280, 720)/gtk_window_set_default_size(window, 1100, 820)/' linux/runner/my_application.cc
+          sed -i 's/set(BINARY_NAME "any_to_any")/set(BINARY_NAME "core")/' linux/CMakeLists.txt
+          sed -i 's/"any_to_any"/"CORE"/g; s/gtk_window_set_default_size(window, 1280, 720)/gtk_window_set_default_size(window, 1100, 820)/' linux/runner/my_application.cc
           grep -n 'BINARY_NAME "' linux/CMakeLists.txt
-          grep -n "ANYtoANY\|set_default_size" linux/runner/my_application.cc
+          grep -n "CORE\|set_default_size" linux/runner/my_application.cc
 
       - name: Kutubxonalarni o'rnatish
         run: flutter pub get
@@ -197,7 +197,7 @@ jobs:
       - name: Ilovani ishga tushirib ko'rish
         run: |
           set +e
-          xvfb-run -a timeout 25s build/linux/x64/release/bundle/anytoany > "$RUNNER_TEMP/run.log" 2>&1
+          xvfb-run -a timeout 25s build/linux/x64/release/bundle/core > "$RUNNER_TEMP/run.log" 2>&1
           code=$?
           tail -30 "$RUNNER_TEMP/run.log"
           if [ "$code" -ne 124 ]; then
@@ -217,20 +217,20 @@ jobs:
           VERSION=$(sed -nE 's/^version:[[:space:]]*([0-9.]+).*/\1/p' pubspec.yaml)
           bash installer/linux/build_deb.sh build/linux/x64/release/bundle "$VERSION" build/linux-dist
           cp installer/linux/README.txt build/linux/x64/release/bundle/README.txt
-          tar -C build/linux/x64/release -czf build/linux-dist/ANYtoANY-linux-x64.tar.gz --transform 's,^bundle,ANYtoANY,' bundle
+          tar -C build/linux/x64/release -czf build/linux-dist/CORE-linux-x64.tar.gz --transform 's,^bundle,CORE,' bundle
           ls -la build/linux-dist
 
       - name: .deb paketni yuklashga chiqarish
         uses: actions/upload-artifact@v4
         with:
-          name: ANYtoANY-Linux-deb
+          name: CORE-Linux-deb
           path: build/linux-dist/*.deb
 
       - name: .tar.gz arxivni yuklashga chiqarish
         uses: actions/upload-artifact@v4
         with:
-          name: ANYtoANY-Linux-tar
-          path: build/linux-dist/ANYtoANY-linux-x64.tar.gz
+          name: CORE-Linux-tar
+          path: build/linux-dist/CORE-linux-x64.tar.gz
 
   ios:
     runs-on: macos-latest
@@ -253,7 +253,7 @@ jobs:
           cp "$RUNNER_TEMP/user_pubspec.yaml" pubspec.yaml
           cp "$RUNNER_TEMP/user_main.dart" lib/main.dart
           PL=ios/Runner/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ANYtoANY" "$PL"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName CORE" "$PL"
           /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string Videolaringizni ilovada ochish va aylantirish uchun kerak." "$PL"
           /usr/libexec/PlistBuddy -c "Add :NSAppleMusicUsageDescription string Audio fayllarni tanlash uchun kerak." "$PL"
           /usr/libexec/PlistBuddy -c "Add :UIFileSharingEnabled bool true" "$PL"
@@ -276,14 +276,14 @@ jobs:
           mkdir -p build/ios-dist/Payload
           cp -R build/ios/iphoneos/Runner.app build/ios-dist/Payload/
           cd build/ios-dist
-          zip -qry ANYtoANY-unsigned.ipa Payload
+          zip -qry CORE-unsigned.ipa Payload
           ls -la
 
       - name: .ipa faylni yuklashga chiqarish
         uses: actions/upload-artifact@v4
         with:
-          name: ANYtoANY-iOS-unsigned-ipa
-          path: build/ios-dist/ANYtoANY-unsigned.ipa
+          name: CORE-iOS-unsigned-ipa
+          path: build/ios-dist/CORE-unsigned.ipa
 
   admin:
     runs-on: ubuntu-latest
@@ -315,7 +315,7 @@ jobs:
           cp "$RUNNER_TEMP/admin_pubspec.yaml" pubspec.yaml
           cp "$RUNNER_TEMP/admin_main.dart" lib/main.dart
           rm -f test/widget_test.dart
-          sed -i 's/android:label="anytoany_admin"/android:label="ANYtoANY Admin"/' android/app/src/main/AndroidManifest.xml
+          sed -i 's/android:label="anytoany_admin"/android:label="CORE Admin"/' android/app/src/main/AndroidManifest.xml
           sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
           cp -r ../installer/icons/android/admin/. android/app/src/main/res/
           grep -n 'android:label\|uses-permission' android/app/src/main/AndroidManifest.xml
@@ -329,5 +329,5 @@ jobs:
       - name: Admin APK ni yuklashga chiqarish
         uses: actions/upload-artifact@v4
         with:
-          name: ANYtoANY-Admin-APK
+          name: CORE-Admin-APK
           path: admin_app/build/app/outputs/flutter-apk/app-release.apk

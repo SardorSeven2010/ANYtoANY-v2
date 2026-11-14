@@ -151,9 +151,9 @@ class AppDrawer extends StatelessWidget {
                   child: Image.asset(
                     "assets/logo.png",
                     height: 64,
-                    semanticLabel: "ANYtoANY",
+                    semanticLabel: appName,
                     errorBuilder: (_, _, _) => const Text(
-                      "ANYtoANY",
+                      appName,
                       style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.black),
                     ),
                   ),
