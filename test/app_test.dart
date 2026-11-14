@@ -90,7 +90,7 @@ void phone(WidgetTester tester) {
 
 void main() {
   setUp(() async {
-    SharedPreferences.setMockInitialValues({'user_email': 'ali@example.com'});
+    SharedPreferences.setMockInitialValues({'user_email': 'ali@example.com', 'notifications_asked': true});
     await themeController.select(appThemes.first);
     profile
       ..isPro = false

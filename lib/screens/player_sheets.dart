@@ -16,6 +16,8 @@ Future<void> showPlayerSheet(
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
+    // video ustida ochiladi: Liquid Glass uslubida ham o'qilishi uchun to'liq zich fon
+    backgroundColor: Theme.of(context).colorScheme.surface,
     constraints: const BoxConstraints(maxWidth: 560),
     builder: builder,
   );

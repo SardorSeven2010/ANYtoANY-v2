@@ -141,6 +141,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
         if (!didPop && _canBack) _browser.goBack().then((_) => _refreshNav());
       },
       child: Scaffold(
+        backgroundColor: scheme.surface, // Liquid Glass uslubida Scaffold shaffof: brauzerga zich fon kerak
         appBar: AppBar(
           titleSpacing: 0,
           title: TextField(
@@ -151,9 +152,12 @@ class _BrowserScreenState extends State<BrowserScreen> {
             textInputAction: TextInputAction.go,
             autocorrect: false,
             onSubmitted: _go,
+            style: TextStyle(color: scheme.onSurface),
             decoration: InputDecoration(
               hintText: "Sayt manzili yoki qidiruv",
               isDense: true,
+              filled: true,
+              fillColor: scheme.surfaceContainerHighest,
               prefixIcon: const Icon(Icons.public_rounded, size: 20),
               suffixIcon: IconButton(
                 key: const Key("browserGo"),
