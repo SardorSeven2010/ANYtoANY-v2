@@ -37,6 +37,14 @@ abstract class BrowserBackend {
   /// Ilova fonda: sayt videoni o'zi to'xtatsa, davom ettiriladi
   Future<void> setBackground(bool on);
 
+  /// Kompyuter versiyasi: sayt kompyuter brauzeri deb o'ylaydi. Ko'p saytlar (YouTube ham) telefon versiyasida
+  /// ekran o'chganda videoni to'xtatadi, kompyuter versiyasida esa davom ettiradi. O'zgarishdan keyin sahifa qayta yuklanadi.
+  bool get desktopMode => false;
+  Future<void> setDesktopMode(bool on) async {}
+
+  /// Native WebView identifikatori (Android): ekran o'chganda uni tirik tutish uchun. Boshqa joyda null.
+  int? get nativeWebViewId => null;
+
   /// Yuklashda ishlatiladigan sarlavhalar: Referer, Cookie, User-Agent
   Future<Map<String, String>> requestHeaders(Uri page);
 

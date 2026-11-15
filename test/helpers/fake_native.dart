@@ -105,4 +105,13 @@ class FakeNativeBridge implements NativeBridge {
     volumeSets.add(value);
     systemVolume = value;
   }
+
+  /// Mini-brauzer WebView'ini fonda tirik tutish: (id, on) juftliklari
+  final List<(int, bool)> webViewKeepAlives = [];
+
+  @override
+  Future<bool> webViewKeepAlive(int id, bool on) async {
+    webViewKeepAlives.add((id, on));
+    return true;
+  }
 }

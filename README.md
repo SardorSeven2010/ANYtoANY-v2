@@ -16,7 +16,7 @@ Android, iPhone, Windows va Linux uchun.
 - **Video yuklagich**: mini-brauzer, sahifadagi videoni o'zi topadi ("Yuklash" tugmasi paydo bo'ladi),
   `.mp4`, HLS (`.m3u8`, AES-128), DASH (`.mpd`); 6 dan 18 gacha parallel bo'lakka bo'lib yuklash;
   hamma narsa qurilmaning o'zida (serverga hech narsa yuborilmaydi). Tayyor video galereyada ko'rinadi
-  (Android: Movies/CORE, iPhone: Rasmlar). Brauzerdagi video ekran o'chganda ham o'ynaydi (bildirishnomada pleyer).
+  (Android: Movies/CORE, iPhone: Rasmlar). Brauzerdagi video ekran o'chganda ham o'ynaydi (bildirishnomada pleyer). YouTube uchun brauzer o'zi kompyuter versiyasiga o'tadi (pastdagi tugma bilan istalgan saytda almashtirish mumkin), chunki telefon versiyasi ekran o'chganda videoni to'xtatadi.
 - **Tarif**: yangi foydalanuvchiga 1 oy tekin PRO (bir qurilmaga bir marta), keyin 1 / 3 / 6 / 9 / 12 oylik.
   PRO: cheksiz yuklash, 18 bo'lak, H.264 / H.265 tanlash, barcha kodeklar, PDF konvertatsiyalari,
   ilova nomini o'zgartirish. Bepul: haftasiga 10 ta yuklash, 6 bo'lak.

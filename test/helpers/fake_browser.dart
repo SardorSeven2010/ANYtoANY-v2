@@ -59,6 +59,21 @@ class FakeBrowser extends BrowserBackend {
   @override
   Future<void> setBackground(bool on) async => background = on;
 
+  bool desktop = false;
+  final List<bool> desktopChanges = [];
+
+  @override
+  bool get desktopMode => desktop;
+
+  @override
+  Future<void> setDesktopMode(bool on) async {
+    desktop = on;
+    desktopChanges.add(on);
+  }
+
+  @override
+  int? get nativeWebViewId => 7;
+
   /// Sahifadagi video holatini taqlid qiladi
   void media({required bool playing, bool hasMedia = true, String title = ''}) =>
       onMedia?.call(BrowserMedia(playing: playing, hasMedia: hasMedia, title: title));

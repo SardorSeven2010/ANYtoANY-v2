@@ -19,16 +19,26 @@ const String mediaKeepAliveScript = r'''
   function define(obj, name, value) {
     try { Object.defineProperty(obj, name, { configurable: true, get: function () { return value; } }); } catch (e) {}
   }
-  define(document, 'hidden', false);
-  define(document, 'webkitHidden', false);
-  define(document, 'visibilityState', 'visible');
-  define(document, 'webkitVisibilityState', 'visible');
-  try { document.hasFocus = function () { return true; }; } catch (e) {}
-  var blocked = ['visibilitychange', 'webkitvisibilitychange', 'pagehide', 'freeze'];
-  blocked.forEach(function (name) {
+  function fakeVisible() {
+    var targets = [document];
+    try { if (window.Document && Document.prototype) targets.push(Document.prototype); } catch (e) {}
+    targets.forEach(function (t) {
+      define(t, 'hidden', false);
+      define(t, 'webkitHidden', false);
+      define(t, 'visibilityState', 'visible');
+      define(t, 'webkitVisibilityState', 'visible');
+    });
+    try { document.hasFocus = function () { return true; }; } catch (e) {}
+  }
+  fakeVisible();
+  // sayt qiymatni o'zgartirib qo'ysa, qaytadan "ko'rinadi" qilamiz
+  setInterval(function () { if (document.hidden !== false || document.visibilityState !== 'visible') fakeVisible(); }, 2000);
+  ['visibilitychange', 'webkitvisibilitychange', 'pagehide', 'freeze'].forEach(function (name) {
     document.addEventListener(name, function (e) { e.stopImmediatePropagation(); }, true);
     window.addEventListener(name, function (e) { e.stopImmediatePropagation(); }, true);
   });
+  // oyna "fokusni yo'qotdi" (ekran o'chdi): faqat oyna darajasidagi hodisa to'xtatiladi, kiritish maydonlaridagi blur emas
+  window.addEventListener('blur', function (e) { if (e.target === window) e.stopImmediatePropagation(); }, true);
 
   // ---- 2) ijro holati
   function mediaElements() {

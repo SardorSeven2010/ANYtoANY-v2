@@ -9,6 +9,15 @@ import '../downloader/detector_js.dart';
 import '../downloader/media_keepalive_js.dart';
 import 'backend.dart';
 
+/// Kompyuter brauzeri ko'rinishidagi User-Agent. Android'da joriy WebView'ning Chrome versiyasi saqlanadi.
+String desktopUserAgent(String? current, {bool ios = false}) {
+  if (ios) {
+    return 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15';
+  }
+  final version = RegExp(r'Chrome/(\d+(?:\.\d+){0,3})').firstMatch(current ?? '')?.group(1) ?? '126.0.0.0';
+  return 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$version Safari/537.36';
+}
+
 /// Android va iPhone'dagi haqiqiy WebView
 class WebViewBackend extends BrowserBackend {
   WebViewBackend() {
@@ -56,6 +65,34 @@ class WebViewBackend extends BrowserBackend {
 
   late final WebViewController _controller;
   bool _background = false;
+  bool _desktop = false;
+
+  @override
+  bool get desktopMode => _desktop;
+
+  @override
+  Future<void> setDesktopMode(bool on) async {
+    _desktop = on;
+    try {
+      if (on) {
+        final current = await _controller.getUserAgent();
+        await _controller.setUserAgent(desktopUserAgent(current, ios: WebViewPlatform.instance is WebKitWebViewPlatform));
+      } else {
+        await _controller.setUserAgent(null);
+      }
+    } catch (_) {}
+  }
+
+  @override
+  int? get nativeWebViewId {
+    final platform = _controller.platform;
+    if (platform is AndroidWebViewController) {
+      try {
+        return platform.webViewIdentifier;
+      } catch (_) {}
+    }
+    return null;
+  }
 
   void _onMediaMessage(String message) {
     try {

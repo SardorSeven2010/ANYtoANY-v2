@@ -24,6 +24,12 @@ Uri addressFromInput(String input) {
 
 // ================= MINI-BRAUZER =================
 // Sahifa ochiladi, video o'ynashi bilan detektor uni topadi va "Yuklash" tugmasi paydo bo'ladi.
+/// Ekran o'chganda videoni to'xtatib qo'yadigan saytlar (YouTube): ular uchun kompyuter versiyasi o'zi yoqiladi
+bool siteNeedsDesktop(String url) {
+  final host = (Uri.tryParse(url)?.host ?? '').toLowerCase();
+  return host == 'youtu.be' || host == 'youtube.com' || host.endsWith('.youtube.com');
+}
+
 class BrowserScreen extends StatefulWidget {
   final Uri? initial;
   final BrowserBackend? backend; // testlar uchun
@@ -57,6 +63,10 @@ class _BrowserScreenState extends State<BrowserScreen>
   String _pageUrl = "";
   StreamSubscription<NativeEvent>? _nativeSub;
   bool _notified = false;
+  bool _desktop = false;
+  bool _desktopByUser = false; // foydalanuvchi o'zi tanlagan: avtomatik almashtirilmaydi
+  bool _keepAlive = false;
+  Timer? _keepAliveOff;
 
   @override
   void initState() {
@@ -70,6 +80,7 @@ class _BrowserScreenState extends State<BrowserScreen>
       _pageUrl = url;
       if (!_focus.hasFocus) _address.text = url;
       if (mounted) setState(() => _loading = true);
+      _autoDesktop(url);
       _refreshNav();
     };
     _browser.onPageFinished = (url) {
@@ -90,8 +101,56 @@ class _BrowserScreenState extends State<BrowserScreen>
     if (initial != null) {
       _started = true;
       _address.text = initial.toString();
-      _browser.load(initial);
+      _open(initial);
     }
+  }
+
+  /// Sahifa ochishdan oldin kerakli versiya (telefon / kompyuter) tanlanadi, shunda sahifa ikki marta yuklanmaydi
+  Future<void> _open(Uri uri) async {
+    if (!_desktopByUser) {
+      final want = siteNeedsDesktop(uri.toString());
+      if (want != _desktop) await _setDesktop(want, reload: false);
+    }
+    await _browser.load(uri);
+  }
+
+  /// Havola bosilganda sahifa o'zi ochilgan bo'lsa ham versiya almashadi (sahifa qayta yuklanadi)
+  void _autoDesktop(String url) {
+    if (_desktopByUser) return;
+    final want = siteNeedsDesktop(url);
+    if (want == _desktop) return;
+    _setDesktop(want);
+    if (want && mounted) {
+      ScaffoldMessenger.maybeOf(context)
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+          content: Text("Kompyuter versiyasi yoqildi: ekran o'chganda ham ovoz davom etadi"),
+          duration: Duration(seconds: 3),
+        ));
+    }
+  }
+
+  Future<void> _setDesktop(bool on, {bool reload = true}) async {
+    if (_desktop == on) return;
+    if (mounted) {
+      setState(() => _desktop = on);
+    } else {
+      _desktop = on;
+    }
+    await _browser.setDesktopMode(on);
+    if (reload && _started) await _browser.reload();
+  }
+
+  /// Ekran o'chganda ham WebView'ni "ko'rinadi" holatda ushlab turish (video ovozi to'xtamasligi uchun)
+  void _setKeepAlive(bool on) {
+    if (on) {
+      _keepAliveOff?.cancel();
+      _keepAliveOff = null;
+    }
+    if (_keepAlive == on) return;
+    _keepAlive = on;
+    final id = _browser.nativeWebViewId;
+    if (id != null || !on) nativeBridge.webViewKeepAlive(id ?? 0, on);
   }
 
   static String _stripHash(String url) => url.split('#').first;
@@ -114,6 +173,15 @@ class _BrowserScreenState extends State<BrowserScreen>
       return;
     }
     _notified = true;
+    if (m.playing) {
+      _setKeepAlive(true);
+    } else {
+      // pauza: keyingi videoga o'tish paytida to'xtamaslik uchun biroz kutamiz
+      _keepAliveOff ??= Timer(const Duration(seconds: 20), () {
+        _keepAliveOff = null;
+        _setKeepAlive(false);
+      });
+    }
     final title = m.title.trim().isEmpty ? "Mini-brauzer" : m.title.trim();
     backgroundService.setMedia(
       MediaInfo(title: title, subtitle: "Mini-brauzer", playing: m.playing),
@@ -121,6 +189,9 @@ class _BrowserScreenState extends State<BrowserScreen>
   }
 
   void _clearNotification() {
+    _keepAliveOff?.cancel();
+    _keepAliveOff = null;
+    _setKeepAlive(false);
     if (!_notified) return;
     _notified = false;
     backgroundService.setMedia(null);
@@ -155,6 +226,7 @@ class _BrowserScreenState extends State<BrowserScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _nativeSub?.cancel();
+    _keepAliveOff?.cancel();
     _clearNotification();
     _browser.dispose();
     _address.dispose();
@@ -169,7 +241,7 @@ class _BrowserScreenState extends State<BrowserScreen>
     _focus.unfocus();
     setState(() => _started = true);
     _address.text = uri.toString();
-    _browser.load(uri);
+    _open(uri);
   }
 
   Future<void> _showVideos() async {
@@ -282,6 +354,19 @@ class _BrowserScreenState extends State<BrowserScreen>
                 tooltip: "Yangilash",
                 icon: const Icon(Icons.refresh_rounded),
                 onPressed: _started ? _browser.reload : null,
+              ),
+              IconButton(
+                key: const Key("browserDesktop"),
+                tooltip: _desktop ? "Telefon versiyasi" : "Kompyuter versiyasi",
+                isSelected: _desktop,
+                icon: const Icon(Icons.desktop_windows_outlined),
+                selectedIcon: const Icon(Icons.desktop_windows_rounded),
+                onPressed: _started
+                    ? () {
+                        _desktopByUser = true;
+                        _setDesktop(!_desktop);
+                      }
+                    : null,
               ),
               IconButton(
                 tooltip: "Yopish",

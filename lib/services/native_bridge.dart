@@ -59,6 +59,10 @@ abstract class NativeBridge {
   /// Tizim media ovozi 0..1 (qo'llab-quvvatlanmasa null)
   Future<double?> getSystemVolume();
   Future<void> setSystemVolume(double value);
+
+  /// Mini-brauzerdagi WebView ekran o'chganda ham "ko'rinadi" holatda ushlab turiladi (video ovozi to'xtamasligi uchun).
+  /// [id] - WebView'ning native identifikatori. Qaytaradi: native qatlam WebView'ni topdimi.
+  Future<bool> webViewKeepAlive(int id, bool on);
 }
 
 class NoopNativeBridge implements NativeBridge {
@@ -99,6 +103,8 @@ class NoopNativeBridge implements NativeBridge {
   Future<double?> getSystemVolume() async => null;
   @override
   Future<void> setSystemVolume(double value) async {}
+  @override
+  Future<bool> webViewKeepAlive(int id, bool on) async => false;
 }
 
 class MethodChannelNativeBridge implements NativeBridge {
@@ -176,6 +182,8 @@ class MethodChannelNativeBridge implements NativeBridge {
 
   @override
   Future<void> setSystemVolume(double value) => _call<bool>('setVolume', false, {'value': value});
+  @override
+  Future<bool> webViewKeepAlive(int id, bool on) => _call('webviewKeepAlive', false, {'id': id, 'on': on});
 }
 
 NativeBridge? _bridge;

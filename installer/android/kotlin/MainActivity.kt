@@ -17,6 +17,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugins.webviewflutter.WebViewFlutterAndroidExternalApi
 
 /** Flutter oynasi + "core/native" kanali: bildirishnoma, fon xizmati, PiP, yorliq, eslatma */
 class MainActivity : FlutterActivity() {
@@ -39,6 +40,7 @@ class MainActivity : FlutterActivity() {
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         CoreBridge.channel = null
+        WebViewKeeper.stop()
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
@@ -132,6 +134,22 @@ class MainActivity : FlutterActivity() {
                 val am = getSystemService(AudioManager::class.java)
                 val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
                 result.success(if (max > 0) am.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / max else 0.0)
+            }
+            "webviewKeepAlive" -> {
+                if (call.argument<Boolean>("on") != true) {
+                    WebViewKeeper.stop()
+                    result.success(true)
+                } else {
+                    val id = (call.argument<Number>("id") ?: 0).toLong()
+                    val engine = flutterEngine
+                    val view = if (engine != null) WebViewFlutterAndroidExternalApi.getWebView(engine, id) else null
+                    if (view != null) {
+                        WebViewKeeper.start(view)
+                        result.success(true)
+                    } else {
+                        result.success(false)
+                    }
+                }
             }
             "setVolume" -> {
                 val am = getSystemService(AudioManager::class.java)

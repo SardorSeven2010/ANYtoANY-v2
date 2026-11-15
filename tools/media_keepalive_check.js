@@ -55,6 +55,21 @@ function fakeMedia(w, tag = 'video') {
   p.d.dispatchEvent(new p.w.Event('visibilitychange'));
   p.w.dispatchEvent(new p.w.Event('pagehide'));
   check('the page never hears that it was hidden', heard === 0, { heard });
+  // oyna "fokusni yo'qotdi" (ekran o'chdi) ham eshitilmaydi, lekin kiritish maydonlaridagi blur ishlayveradi
+  let blurs = 0;
+  let fieldBlurs = 0;
+  p.w.addEventListener('blur', (e) => { if (e.target === p.w) blurs++; });
+  p.d.body.innerHTML = '<input id="f">';
+  const field = p.d.getElementById('f');
+  field.addEventListener('blur', () => fieldBlurs++);
+  p.w.dispatchEvent(new p.w.Event('blur'));
+  field.dispatchEvent(new p.w.Event('blur'));
+  check('window blur is not heard by the page', blurs === 0, { blurs });
+  check('input blur still works', fieldBlurs === 1, { fieldBlurs });
+  // sayt qiymatni prototipdan o'qisa ham "ko'rinadi"
+  const proto = p.w.Document.prototype;
+  const desc = Object.getOwnPropertyDescriptor(proto, 'hidden');
+  check('Document.prototype.hidden is faked too', !!desc && desc.get.call(p.d) === false);
 
   // 2. ijro holati ilovaga yuboriladi
   p = page('<title>Qo\'shiq</title>');
