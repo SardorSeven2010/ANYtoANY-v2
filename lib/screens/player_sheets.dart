@@ -333,3 +333,67 @@ class QueueSheet extends StatelessWidget {
     );
   }
 }
+
+// ================= FONDA OVOZ VA QALQIB CHIQUVCHI OYNA =================
+class BackgroundSheet extends StatelessWidget {
+  final PlayerController controller;
+  const BackgroundSheet({super.key, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(12, 0, 12, 4),
+              child: Text(
+                "Fon va qalqib chiquvchi oyna",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+            ),
+            SwitchListTile(
+              key: const Key("backgroundAudioSwitch"),
+              secondary: const Icon(Icons.headphones_rounded),
+              title: const Text("Fonda ovoz"),
+              subtitle: const Text(
+                "Yoqilsa, ilovadan chiqsangiz yoki ekran o'chsa ham ovoz davom etadi. "
+                "Bildirishnomalar qatorida pleyer chiqadi.",
+              ),
+              value: controller.backgroundAudio,
+              onChanged: controller.setBackgroundAudio,
+            ),
+            if (controller.pipSupported)
+              SwitchListTile(
+                key: const Key("autoPipSwitch"),
+                secondary: const Icon(Icons.picture_in_picture_alt_rounded),
+                title: const Text("Qalqib chiquvchi oyna"),
+                subtitle: const Text(
+                  "Yoqilsa, video ijro etilayotganda bosh ekranga chiqsangiz, video boshqa ilovalar ustida suzib turadi.",
+                ),
+                value: controller.autoPip,
+                onChanged: controller.setAutoPip,
+              ),
+            if (controller.pipSupported)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                child: FilledButton.icon(
+                  key: const Key("pipNowButton"),
+                  onPressed: () {
+                    Navigator.of(context).maybePop();
+                    controller.enterPip();
+                  },
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  label: const Text("Hozir qalqib chiquvchi oynaga o'tkazish"),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

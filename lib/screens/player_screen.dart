@@ -23,20 +23,27 @@ class PlayerScreen extends StatefulWidget {
   final int startIndex;
 
   /// Bitta fayl
-  const PlayerScreen({super.key, required String this.path, required String this.title})
-      : items = null,
-        startIndex = 0;
+  const PlayerScreen({
+    super.key,
+    required String this.path,
+    required String this.title,
+  }) : items = null,
+       startIndex = 0;
 
   /// Bir necha fayl: tanlangani birinchi bo'lib ochiladi, keyingilari ketma-ket o'ynaydi
-  const PlayerScreen.queue({super.key, required List<QueueItem> this.items, this.startIndex = 0})
-      : path = null,
-        title = null;
+  const PlayerScreen.queue({
+    super.key,
+    required List<QueueItem> this.items,
+    this.startIndex = 0,
+  }) : path = null,
+       title = null;
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen> {
+class _PlayerScreenState extends State<PlayerScreen>
+    with WidgetsBindingObserver {
   PlayerController? _c;
   String? _fatal;
 
@@ -53,12 +60,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String? _toast;
   Timer? _toastTimer;
 
+  // surish jestlari: gorizontal = o'tkazish, chap yarmida vertikal = yorug'lik, o'ng yarmida = ovoz
+  _Swipe? _swipe;
+  Duration _swipeStart = Duration.zero;
+  Duration _swipeTarget = Duration.zero;
+  double _swipeValue = 0;
+  Timer? _swipeTimer;
+
   bool get _isMobile => isAndroidApp || isIOSApp;
 
   List<QueueItem> get _items =>
       widget.items ?? [QueueItem(title: widget.title ?? "", path: widget.path)];
 
-  String get _firstPath => _items[widget.startIndex.clamp(0, _items.length - 1)].path ?? "";
+  String get _firstPath =>
+      _items[widget.startIndex.clamp(0, _items.length - 1)].path ?? "";
 
   @override
   void initState() {
@@ -72,13 +87,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
       );
       _c = controller;
       controller.addListener(_onChange);
+      controller.notice.addListener(_onNotice);
+      WidgetsBinding.instance.addObserver(this);
       controller.start();
-      if (!controller.isAudio) SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      if (!controller.isAudio)
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     } catch (_) {
       _fatal = isDesktopApp
           ? "Ichki pleyer ishga tushmadi (libmpv topilmadi). Fayl kompyuteringizdagi pleyerda ochiladi."
           : "Bu qurilmada pleyerni ishga tushirib bo'lmadi.";
-      if (isDesktopApp) WidgetsBinding.instance.addPostFrameCallback((_) => _openInSystemPlayer());
+      if (isDesktopApp)
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _openInSystemPlayer(),
+        );
     }
     _scheduleHide();
   }
@@ -90,8 +111,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
     setState(() {});
   }
 
+  void _onNotice() {
+    final n = _c?.notice.value;
+    if (n != null && mounted) _say(n);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final c = _c;
+    if (c == null) return;
+    if (state == AppLifecycleState.resumed) {
+      c.onAppResumed();
+    } else {
+      c.onAppLifecycle(state);
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _swipeTimer?.cancel();
+    _c?.notice.removeListener(_onNotice);
     _hideTimer?.cancel();
     _feedbackTimer?.cancel();
     _toastTimer?.cancel();
@@ -108,7 +148,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 4), () {
       if (!mounted) return;
-      if (_c?.playing == true && !(_c?.isAudio ?? true)) setState(() => _controlsVisible = false);
+      if (_c?.playing == true && !(_c?.isAudio ?? true))
+        setState(() => _controlsVisible = false);
     });
   }
 
@@ -144,6 +185,80 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
   }
 
+  // ---------- surish jestlari ----------
+
+  void _showSwipe(_Swipe kind) {
+    _swipeTimer?.cancel();
+    setState(() => _swipe = kind);
+  }
+
+  void _hideSwipeSoon() {
+    _swipeTimer?.cancel();
+    _swipeTimer = Timer(const Duration(milliseconds: 600), () {
+      if (mounted) setState(() => _swipe = null);
+    });
+  }
+
+  // gorizontal: ko'rsatilgan joydan boshlab surilgan masofaga qarab oldinga / orqaga
+  void _hDragStart(DragStartDetails d) {
+    final c = _c;
+    if (c == null || c.duration <= Duration.zero) return;
+    _swipeStart = c.position.value;
+    _swipeTarget = _swipeStart;
+    _swipeValue = 0;
+    _hideTimer?.cancel();
+    _showSwipe(_Swipe.seek);
+  }
+
+  void _hDragUpdate(DragUpdateDetails d, double width) {
+    final c = _c;
+    if (c == null || _swipe != _Swipe.seek) return;
+    _swipeValue += d.delta.dx;
+    setState(
+      () => _swipeTarget = swipeSeekTarget(
+        _swipeStart,
+        _swipeValue,
+        width,
+        c.duration,
+      ),
+    );
+  }
+
+  void _hDragEnd(DragEndDetails d) {
+    final c = _c;
+    if (c != null && _swipe == _Swipe.seek) c.seekTo(_swipeTarget);
+    _hideSwipeSoon();
+    _scheduleHide();
+  }
+
+  // vertikal: chap yarmi - yorug'lik, o'ng yarmi - ovoz (yuqoriga surilsa oshadi)
+  void _vDragStart(DragStartDetails d, double width) {
+    final c = _c;
+    if (c == null) return;
+    _hideTimer?.cancel();
+    _showSwipe(
+      d.localPosition.dx < width / 2 ? _Swipe.brightness : _Swipe.volume,
+    );
+  }
+
+  void _vDragUpdate(DragUpdateDetails d, double height) {
+    final c = _c;
+    if (c == null || height <= 0) return;
+    final delta =
+        -d.delta.dy /
+        (height * 0.8); // ekran balandligining ~80% = to'liq o'zgarish
+    if (_swipe == _Swipe.brightness) {
+      c.changeBrightness(delta);
+    } else if (_swipe == _Swipe.volume) {
+      c.changeVolume(delta);
+    }
+  }
+
+  void _vDragEnd(DragEndDetails d) {
+    _hideSwipeSoon();
+    _scheduleHide();
+  }
+
   void _say(String text) {
     _toastTimer?.cancel();
     setState(() => _toast = text);
@@ -158,11 +273,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final c = _c;
     if (c == null) return;
     final where = await c.screenshot();
-    _say(where == null ? "Skrinshot olib bo'lmadi" : "Skrinshot saqlandi: $where");
+    _say(
+      where == null ? "Skrinshot olib bo'lmadi" : "Skrinshot saqlandi: $where",
+    );
   }
 
   void _rotate() {
-    final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
+    final landscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
     SystemChrome.setPreferredOrientations(
       landscape
           ? [DeviceOrientation.portraitUp]
@@ -178,15 +296,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _repeat() {
     final c = _c!;
-    c.cycleRepeat();
-    _say(QueueSheet.repeatLabel(c.queue.repeat));
+    if (c.isSingle) {
+      // bitta video: oddiy yoqish / o'chirish
+      c.toggleRepeatSingle();
+      _say(c.repeatOn ? "Video takrorlanadi" : "Takrorlash o'chirildi");
+    } else {
+      c.cycleRepeat();
+      _say(QueueSheet.repeatLabel(c.queue.repeat));
+    }
     _keepControls();
   }
 
   void _shuffle() {
     final c = _c!;
     c.toggleShuffle();
-    _say(c.queue.shuffle ? "Aralashtirish yoqildi" : "Aralashtirish o'chirildi");
+    _say(
+      c.queue.shuffle ? "Aralashtirish yoqildi" : "Aralashtirish o'chirildi",
+    );
     _keepControls();
   }
 
@@ -204,7 +330,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       opened = await launchUrl(Uri.file(_firstPath));
     } catch (_) {}
     if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tizim pleyerini ochib bo'lmadi")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Tizim pleyerini ochib bo'lmadi")),
+      );
     }
   }
 
@@ -227,8 +355,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       body: CallbackShortcuts(
         bindings: <ShortcutActivator, VoidCallback>{
           const SingleActivator(LogicalKeyboardKey.space): c.togglePlay,
-          const SingleActivator(LogicalKeyboardKey.arrowLeft): () => c.seekBy(-seekStep),
-          const SingleActivator(LogicalKeyboardKey.arrowRight): () => c.seekBy(seekStep),
+          const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+              c.seekBy(-seekStep),
+          const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+              c.seekBy(seekStep),
           const SingleActivator(LogicalKeyboardKey.keyN): c.next,
           const SingleActivator(LogicalKeyboardKey.keyP): c.previous,
           const SingleActivator(LogicalKeyboardKey.keyS): _screenshot,
@@ -243,6 +373,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               if (c.loading) const Center(child: CircularProgressIndicator()),
               if (c.error != null && !c.loading) _errorView(c),
               if (!pip && _feedbackZone != null) _feedback(),
+              if (!pip && _swipe != null) _swipeIndicator(c),
               if (!pip) _controls(c),
               if (_toast != null && !pip) _toastView(),
             ],
@@ -254,16 +385,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Widget _fatalScreen() {
     return AppScaffold(
-      appBar: AppBar(title: Text(widget.title ?? widget.items?.first.title ?? "", maxLines: 1, overflow: TextOverflow.ellipsis)),
+      appBar: AppBar(
+        title: Text(
+          widget.title ?? widget.items?.first.title ?? "",
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(isDesktopApp ? Icons.play_circle_outline_rounded : Icons.error_outline_rounded, size: 64),
+              Icon(
+                isDesktopApp
+                    ? Icons.play_circle_outline_rounded
+                    : Icons.error_outline_rounded,
+                size: 64,
+              ),
               const SizedBox(height: 12),
-              Text(_fatal ?? "", textAlign: TextAlign.center, style: const TextStyle(fontSize: 16)),
+              Text(
+                _fatal ?? "",
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16),
+              ),
               if (isDesktopApp) ...[
                 const SizedBox(height: 16),
                 FilledButton.icon(
@@ -293,8 +439,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 Container(
                   width: 180,
                   height: 180,
-                  decoration: BoxDecoration(color: scheme.primaryContainer, borderRadius: BorderRadius.circular(40)),
-                  child: Icon(Icons.music_note_rounded, size: 96, color: scheme.onPrimaryContainer),
+                  decoration: BoxDecoration(
+                    color: scheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(40),
+                  ),
+                  child: Icon(
+                    Icons.music_note_rounded,
+                    size: 96,
+                    color: scheme.onPrimaryContainer,
+                  ),
                 ),
                 const SizedBox(height: 22),
                 Text(
@@ -302,7 +455,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   maxLines: 3,
                   textAlign: TextAlign.center,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: scheme.onSurface),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onSurface,
+                  ),
                 ),
               ],
             ),
@@ -313,7 +470,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final ratio = c.aspect.ratio;
     final video = ratio == null
         ? c.engine.buildVideo(fit: c.aspect.fit)
-        : Center(child: AspectRatio(aspectRatio: ratio, child: c.engine.buildVideo(fit: c.aspect.fit)));
+        : Center(
+            child: AspectRatio(
+              aspectRatio: ratio,
+              child: c.engine.buildVideo(fit: c.aspect.fit),
+            ),
+          );
     return ColoredBox(color: Colors.black, child: video);
   }
 
@@ -326,6 +488,119 @@ class _PlayerScreenState extends State<PlayerScreen> {
         onTap: _toggleControls,
         onDoubleTapDown: (d) => _tapDown = d.localPosition,
         onDoubleTap: () => _onDoubleTap(box.maxWidth),
+        onHorizontalDragStart: _hDragStart,
+        onHorizontalDragUpdate: (d) => _hDragUpdate(d, box.maxWidth),
+        onHorizontalDragEnd: _hDragEnd,
+        onHorizontalDragCancel: _hideSwipeSoon,
+        onVerticalDragStart: (d) => _vDragStart(d, box.maxWidth),
+        onVerticalDragUpdate: (d) => _vDragUpdate(d, box.maxHeight),
+        onVerticalDragEnd: _vDragEnd,
+        onVerticalDragCancel: _hideSwipeSoon,
+      ),
+    );
+  }
+
+  /// Surish paytida chiqadigan ko'rsatkich: o'tkazish vaqti, yorug'lik yoki ovoz darajasi
+  Widget _swipeIndicator(PlayerController c) {
+    final kind = _swipe!;
+    if (kind == _Swipe.seek) {
+      final diff = _swipeTarget - _swipeStart;
+      final sign = diff.isNegative ? "-" : "+";
+      final secs = diff.inSeconds.abs();
+      return IgnorePointer(
+        child: Align(
+          alignment: const Alignment(0, -0.35),
+          child: Container(
+            key: const Key("swipeIndicator_seek"),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _format(_swipeTarget),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  "$sign${_format(Duration(seconds: secs))}",
+                  style: TextStyle(
+                    color: diff.isNegative
+                        ? Colors.orangeAccent
+                        : Colors.lightGreenAccent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    final bright = kind == _Swipe.brightness;
+    final level = bright ? c.brightness : c.volume;
+    final IconData icon = bright
+        ? (level > 0.66
+              ? Icons.brightness_high_rounded
+              : (level > 0.33
+                    ? Icons.brightness_medium_rounded
+                    : Icons.brightness_low_rounded))
+        : (level <= 0.001
+              ? Icons.volume_off_rounded
+              : (level < 0.5
+                    ? Icons.volume_down_rounded
+                    : Icons.volume_up_rounded));
+    return IgnorePointer(
+      child: Align(
+        alignment: Alignment(bright ? -0.82 : 0.82, 0),
+        child: Container(
+          key: Key(
+            bright ? "swipeIndicator_brightness" : "swipeIndicator_volume",
+          ),
+          width: 64,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.black54,
+            borderRadius: BorderRadius.circular(32),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 120,
+                width: 8,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: RotatedBox(
+                    quarterTurns: 3,
+                    child: LinearProgressIndicator(
+                      value: level.clamp(0.0, 1.0),
+                      backgroundColor: Colors.white24,
+                      minHeight: 8,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "${(level * 100).round()}%",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -335,7 +610,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final IconData icon = switch (zone) {
       TapZone.left => Icons.fast_rewind_rounded,
       TapZone.right => Icons.fast_forward_rounded,
-      TapZone.center => (_c?.playing ?? false) ? Icons.play_arrow_rounded : Icons.pause_rounded,
+      TapZone.center =>
+        (_c?.playing ?? false) ? Icons.play_arrow_rounded : Icons.pause_rounded,
     };
     final String text = switch (zone) {
       TapZone.center => "",
@@ -351,12 +627,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
         child: Container(
           key: Key("feedback_${zone.name}"),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(40)),
+          decoration: BoxDecoration(
+            color: Colors.black54,
+            borderRadius: BorderRadius.circular(40),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, color: Colors.white, size: 40),
-              if (text.isNotEmpty) Text(text, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+              if (text.isNotEmpty)
+                Text(
+                  text,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
             ],
           ),
         ),
@@ -374,8 +661,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
           child: Container(
             key: const Key("playerToast"),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(22)),
-            child: Text(_toast!, style: const TextStyle(color: Colors.white), textAlign: TextAlign.center),
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Text(
+              _toast!,
+              style: const TextStyle(color: Colors.white),
+              textAlign: TextAlign.center,
+            ),
           ),
         ),
       ),
@@ -387,20 +681,42 @@ class _PlayerScreenState extends State<PlayerScreen> {
       child: Container(
         margin: const EdgeInsets.all(24),
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(24)),
+        decoration: BoxDecoration(
+          color: Colors.black87,
+          borderRadius: BorderRadius.circular(24),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded, color: Colors.white, size: 48),
+            const Icon(
+              Icons.error_outline_rounded,
+              color: Colors.white,
+              size: 48,
+            ),
             const SizedBox(height: 10),
-            Text(c.error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 16)),
+            Text(
+              c.error!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+            ),
             const SizedBox(height: 14),
             Wrap(
               spacing: 10,
               children: [
-                FilledButton(onPressed: () => c.jumpTo(c.queue.index), child: const Text("Qayta urinish")),
-                if (c.queue.length > 1) OutlinedButton(onPressed: c.next, child: const Text("Keyingisi")),
-                if (isDesktopApp) OutlinedButton(onPressed: _openInSystemPlayer, child: const Text("Tizim pleyerida ochish")),
+                FilledButton(
+                  onPressed: () => c.jumpTo(c.queue.index),
+                  child: const Text("Qayta urinish"),
+                ),
+                if (c.queue.length > 1)
+                  OutlinedButton(
+                    onPressed: c.next,
+                    child: const Text("Keyingisi"),
+                  ),
+                if (isDesktopApp)
+                  OutlinedButton(
+                    onPressed: _openInSystemPlayer,
+                    child: const Text("Tizim pleyerida ochish"),
+                  ),
               ],
             ),
           ],
@@ -412,7 +728,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // ---------- boshqaruv paneli ----------
 
   Widget _controls(PlayerController c) {
-    final bool show = _controlsVisible || c.isAudio || !c.playing || c.error != null;
+    final bool show =
+        _controlsVisible || c.isAudio || !c.playing || c.error != null;
     return AnimatedOpacity(
       key: const Key("controls"),
       opacity: show ? 1 : 0,
@@ -435,7 +752,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final q = c.queue;
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black87, Colors.transparent]),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.black87, Colors.transparent],
+        ),
       ),
       child: SafeArea(
         bottom: false,
@@ -456,10 +777,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     q.current.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
                   ),
                   if (q.length > 1)
-                    Text("${q.index + 1} / ${q.length}", style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    Text(
+                      "${q.index + 1} / ${q.length}",
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -494,36 +825,69 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _transport(PlayerController c) {
-    Widget button(IconData icon, VoidCallback? onTap, {double size = 38, Key? key, String? tip}) => IconButton(
-          key: key,
-          tooltip: tip,
-          iconSize: size,
-          color: Colors.white,
-          style: IconButton.styleFrom(backgroundColor: Colors.black38),
-          icon: Icon(icon),
-          onPressed: onTap == null
-              ? null
-              : () {
-                  onTap();
-                  _keepControls();
-                },
-        );
-    return Row(
+    Widget button(
+      IconData icon,
+      VoidCallback? onTap, {
+      double size = 38,
+      Key? key,
+      String? tip,
+    }) => IconButton(
+      key: key,
+      tooltip: tip,
+      iconSize: size,
+      color: Colors.white,
+      style: IconButton.styleFrom(backgroundColor: Colors.black38),
+      icon: Icon(icon),
+      onPressed: onTap == null
+          ? null
+          : () {
+              onTap();
+              _keepControls();
+            },
+    );
+    final replay = c.ended
+        ? Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              "Qayta ijro",
+              key: const Key("replayLabel"),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                shadows: [Shadow(blurRadius: 6)],
+              ),
+            ),
+          )
+        : const SizedBox.shrink();
+    final row = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        button(Icons.skip_previous_rounded, c.previous, key: const Key("prevButton"), tip: "Oldingi"),
+        button(
+          Icons.skip_previous_rounded,
+          c.previous,
+          key: const Key("prevButton"),
+          tip: "Oldingi",
+        ),
         const SizedBox(width: 20),
         button(
-          c.ended ? Icons.replay_rounded : (c.playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
+          c.ended
+              ? Icons.replay_rounded
+              : (c.playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
           c.togglePlay,
           size: 54,
           key: const Key("playPauseButton"),
           tip: c.playing ? "Pauza" : "Ijro",
         ),
         const SizedBox(width: 20),
-        button(Icons.skip_next_rounded, c.next, key: const Key("nextButton"), tip: "Keyingi"),
+        button(
+          Icons.skip_next_rounded,
+          c.next,
+          key: const Key("nextButton"),
+          tip: "Keyingi",
+        ),
       ],
     );
+    return Column(mainAxisSize: MainAxisSize.min, children: [row, replay]);
   }
 
   Widget _bottomPanel(PlayerController c) {
@@ -531,7 +895,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final video = !c.isAudio;
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Colors.black87, Colors.transparent]),
+        gradient: LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [Colors.black87, Colors.transparent],
+        ),
       ),
       child: SafeArea(
         top: false,
@@ -545,10 +913,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 builder: (context, pos, _) {
                   final total = c.duration.inMilliseconds;
                   final double max = total <= 0 ? 1 : total.toDouble();
-                  final double value = (_dragMs ?? pos.inMilliseconds.toDouble()).clamp(0, max).toDouble();
+                  final double value =
+                      (_dragMs ?? pos.inMilliseconds.toDouble())
+                          .clamp(0, max)
+                          .toDouble();
                   return Row(
                     children: [
-                      Text(_format(Duration(milliseconds: value.round())), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                      Text(
+                        _format(Duration(milliseconds: value.round())),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
                       Expanded(
                         child: Slider(
                           key: const Key("seekBar"),
@@ -568,7 +945,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           },
                         ),
                       ),
-                      Text(_format(c.duration), style: const TextStyle(color: Colors.white, fontSize: 12)),
+                      Text(
+                        _format(c.duration),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   );
                 },
@@ -579,26 +962,45 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   children: [
                     _Tool(
                       key: const Key("repeatButton"),
-                      icon: switch (q.repeat) {
-                        QueueRepeat.off => Icons.repeat_rounded,
-                        QueueRepeat.all => Icons.repeat_on_rounded,
-                        QueueRepeat.one => Icons.repeat_one_on_rounded,
-                      },
-                      label: switch (q.repeat) {
-                        QueueRepeat.off => "To'xtash",
-                        QueueRepeat.all => "Ro'yxat",
-                        QueueRepeat.one => "Bitta",
-                      },
+                      icon: c.isSingle
+                          ? (c.repeatOn
+                                ? Icons.repeat_one_on_rounded
+                                : Icons.repeat_one_rounded)
+                          : switch (q.repeat) {
+                              QueueRepeat.off => Icons.repeat_rounded,
+                              QueueRepeat.all => Icons.repeat_on_rounded,
+                              QueueRepeat.one => Icons.repeat_one_on_rounded,
+                            },
+                      label: c.isSingle
+                          ? "Takrorlash"
+                          : switch (q.repeat) {
+                              QueueRepeat.off => "To'xtash",
+                              QueueRepeat.all => "Ro'yxat",
+                              QueueRepeat.one => "Bitta",
+                            },
                       active: q.repeat != QueueRepeat.off,
                       onTap: _repeat,
                     ),
                     _Tool(
-                      key: const Key("shuffleButton"),
-                      icon: q.shuffle ? Icons.shuffle_on_rounded : Icons.shuffle_rounded,
-                      label: "Aralash",
-                      active: q.shuffle,
-                      onTap: _shuffle,
+                      key: const Key("backgroundButton"),
+                      icon: c.backgroundAudio
+                          ? Icons.headphones_rounded
+                          : Icons.headphones_outlined,
+                      label: "Fon",
+                      active: c.backgroundAudio,
+                      onTap: () =>
+                          _sheet((c) => BackgroundSheet(controller: c)),
                     ),
+                    if (!c.isSingle)
+                      _Tool(
+                        key: const Key("shuffleButton"),
+                        icon: q.shuffle
+                            ? Icons.shuffle_on_rounded
+                            : Icons.shuffle_rounded,
+                        label: "Aralash",
+                        active: q.shuffle,
+                        onTap: _shuffle,
+                      ),
                     _Tool(
                       key: const Key("speedButton"),
                       icon: Icons.speed_rounded,
@@ -643,7 +1045,13 @@ class _Tool extends StatelessWidget {
   final String label;
   final bool active;
   final VoidCallback onTap;
-  const _Tool({super.key, required this.icon, required this.label, required this.onTap, this.active = false});
+  const _Tool({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.active = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -665,3 +1073,6 @@ class _Tool extends StatelessWidget {
     );
   }
 }
+
+/// Hozir qaysi surish jesti bajarilyapti
+enum _Swipe { seek, brightness, volume }

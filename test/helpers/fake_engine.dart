@@ -102,7 +102,9 @@ class FakeEngine implements PlayerEngine {
   }
 
   @override
-  Future<void> setVolume(double percent) async {}
+  Future<void> setVolume(double percent) async {
+    log.add('volume:$percent');
+  }
 
   @override
   Future<void> setDecoder(DecoderMode mode) async {

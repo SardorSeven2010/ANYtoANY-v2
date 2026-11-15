@@ -191,7 +191,7 @@ void main() {
     expect(codecs(info), containsAll(['h264', 'aac']));
   });
 
-  test('PRO: H.265 choice re-encodes to HEVC', () async {
+  test('PRO: H.265 choice re-encodes to HEVC that phones can show (Main, 8-bit yuv420p, hvc1, even size)', () async {
     if (!await hasEncoder('libx265')) return markTestSkipped('no libx265');
     final stages = <JobStage>[];
     final r = await runDownloadJob(
@@ -200,8 +200,70 @@ void main() {
       <String>{},
       callbacks(stages: stages),
     );
-    expect(codecs(await probe(r.path)), contains('hevc'));
+    final info = await probe(r.path);
+    expect(codecs(info), contains('hevc'));
+    final video = (info['streams'] as List).cast<Map<String, dynamic>>().firstWhere((s) => s['codec_type'] == 'video');
+    expect(video['pix_fmt'], 'yuv420p');
+    expect(video['codec_tag_string'], 'hvc1', reason: 'the tag Android and Apple players expect');
+    expect(video['profile'], 'Main');
+    expect((video['width'] as int) % 2, 0);
+    expect((video['height'] as int) % 2, 0);
     expect(stages, contains(JobStage.converting));
+    expect(r.note, isNull, reason: 'no fallback was needed');
+    // to'liq dekodlanadi va rasm bor
+    expect(await isPlayableVideo(r.path), isTrue);
+    final dec = await Process.run('ffmpeg', ['-v', 'error', '-i', r.path, '-f', 'null', '-']);
+    expect(dec.exitCode, 0);
+    expect((dec.stderr as String).trim(), isEmpty);
+  });
+
+  test('isPlayableVideo: a real video passes; audio only, garbage and missing files do not', () async {
+    expect(await isPlayableVideo('${src.path}/big.mp4'), isTrue);
+    final audioOnly = '${src.path}/only_audio.m4a';
+    await ff(['-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:a', 'aac', audioOnly]);
+    expect(await isPlayableVideo(audioOnly), isFalse, reason: 'no picture');
+    final garbage = File('${src.path}/garbage.mp4')..writeAsStringSync('hech narsa emas');
+    expect(await isPlayableVideo(garbage.path), isFalse);
+    expect(await isPlayableVideo('${src.path}/yoq.mp4'), isFalse);
+    final info = await probeVideo('${src.path}/big.mp4');
+    expect((info!.codec, info.width, info.height), ('h264', 640, 360));
+    expect(await probeVideo(audioOnly), isA<VideoInfo>().having((i) => i.hasPicture, 'hasPicture', isFalse));
+  });
+
+  test('if the encoded file is not playable, H.265 falls back to H.264 and tells the user', () async {
+    final out1 = '${out.path}/x.mp4';
+    File(out1).writeAsStringSync('buzilgan');
+    var retried = 0;
+    final warning = await verifyOrRetryH264(out1, OutputCodec.h265, callbacks(), () async {
+      retried++;
+      File(out1).writeAsBytesSync(File('${src.path}/big.mp4').readAsBytesSync());
+      return true;
+    });
+    expect(retried, 1);
+    expect(warning, contains('H.264'));
+    expect(await isPlayableVideo(out1), isTrue);
+  });
+
+  test('the fallback is not used when the result is fine, for original, or when H.264 itself fails', () async {
+    var retried = 0;
+    final good = '${out.path}/good.mp4';
+    File(good).writeAsBytesSync(File('${src.path}/big.mp4').readAsBytesSync());
+    expect(await verifyOrRetryH264(good, OutputCodec.h265, callbacks(), () async => retried++ == 0), isNull);
+    expect(await verifyOrRetryH264('${out.path}/anything.mp4', OutputCodec.original, callbacks(), () async => retried++ == 0), isNull);
+    expect(retried, 0);
+
+    final bad = '${out.path}/bad.mp4';
+    File(bad).writeAsStringSync('buzilgan');
+    await expectLater(
+      verifyOrRetryH264(bad, OutputCodec.h264, callbacks(), () async => true),
+      throwsA(isA<DownloadException>().having((e) => e.message, 'm', contains('ochilmadi'))),
+    );
+    File(bad).writeAsStringSync('buzilgan');
+    await expectLater(
+      verifyOrRetryH264(bad, OutputCodec.h265, callbacks(), () async => false),
+      throwsA(isA<DownloadException>()),
+    );
+    expect(File(bad).existsSync(), isFalse, reason: 'a broken result is never left behind');
   });
 
   test('PRO: H.264 choice re-encodes from another codec', () async {

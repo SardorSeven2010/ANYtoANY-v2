@@ -33,6 +33,11 @@ void main() {
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', clip,
     ]);
     expect(r.exitCode, 0, reason: r.stderr.toString());
+    final h = await Process.run('ffmpeg', [
+      '-v', 'error', '-y', '-i', clip, '-t', '3', '-c:v', 'libx265', '-preset', 'ultrafast', '-tag:v', 'hvc1',
+      '-pix_fmt', 'yuv420p', '-c:a', 'aac', '${dir.path}/hevc.mp4',
+    ]);
+    expect(h.exitCode, 0, reason: h.stderr.toString());
   });
 
   setUp(() async {
@@ -124,5 +129,19 @@ void main() {
     final err = engine.errorStream.first.timeout(const Duration(seconds: 15));
     await engine.open(bad.path);
     expect((await err), isNotEmpty);
+  });
+
+  test('an H.265 (HEVC) file plays through every decoder mode: no errors, time moves on', () async {
+    final errors = <String>[];
+    final sub = engine.errorStream.listen(errors.add);
+    for (final mode in DecoderMode.values) {
+      await engine.setDecoder(mode);
+      await engine.open('${dir.path}/hevc.mp4');
+      await until(() => engine.duration > Duration.zero);
+      await until(() => engine.position > const Duration(milliseconds: 400));
+      expect(engine.playing, isTrue, reason: mode.name);
+    }
+    await sub.cancel();
+    expect(errors, isEmpty, reason: errors.join('; '));
   });
 }

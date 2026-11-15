@@ -1,9 +1,12 @@
 import 'package:any_to_any/app_theme.dart';
+import 'package:any_to_any/player/controller.dart';
 import 'package:any_to_any/player/engine.dart';
 import 'package:any_to_any/player/play_queue.dart';
 import 'package:any_to_any/screens/player_screen.dart';
 import 'package:any_to_any/screens/player_sheets.dart';
+import 'package:any_to_any/services/audio_focus.dart';
 import 'package:any_to_any/services/background.dart';
+import 'package:any_to_any/services/device_controls.dart';
 import 'package:any_to_any/services/native_bridge.dart';
 import 'package:any_to_any/services/screenshots.dart';
 import 'package:flutter/foundation.dart';
@@ -11,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'helpers/fake_device.dart';
 import 'helpers/fake_engine.dart';
 import 'helpers/fake_native.dart';
 
@@ -24,7 +28,14 @@ void main() {
 
   List<QueueItem> videos(int n) => [for (var i = 0; i < n; i++) QueueItem(title: 'film$i.mp4', path: '/m/film$i.mp4')];
 
+  late FakeDeviceControls device;
+  late FakeAudioFocus focus;
+
   setUp(() {
+    device = FakeDeviceControls();
+    focus = FakeAudioFocus();
+    setDeviceControls(device);
+    setAudioFocus(focus);
     engine = FakeEngine();
     bridge = FakeNativeBridge();
     playerEngineFactory = () => engine;
@@ -41,6 +52,8 @@ void main() {
   });
 
   tearDown(() {
+    setDeviceControls(null);
+    setAudioFocus(null);
     playerEngineFactory = () => MediaKitEngine();
     screenshotSaver = saveScreenshotToDevice;
     setNativeBridge(null);
@@ -428,6 +441,186 @@ void main() {
     expect(bridge.pipArmed, isFalse);
   });
 
+  group('swipe gestures', () {
+    Future<void> drag(WidgetTester tester, Offset from, Offset by) async {
+      final gesture = await tester.startGesture(from);
+      await gesture.moveBy(Offset(by.dx.sign * 25, by.dy.sign * 25)); // ishqalanish chegarasidan o'tish
+      await gesture.moveBy(by);
+      await tester.pump();
+    }
+
+    Offset at(WidgetTester tester, double fx, double fy) {
+      final r = tester.getRect(find.byKey(const Key('gestureLayer')));
+      return Offset(r.left + r.width * fx, r.top + r.height * fy);
+    }
+
+    testWidgets('left to right: goes forward by the swiped distance; shows where it will land', (tester) async {
+      await open(tester);
+      engine.tick(const Duration(seconds: 20));
+      final gesture = await tester.startGesture(at(tester, 0.2, 0.4));
+      await gesture.moveBy(const Offset(25, 0));
+      await gesture.moveBy(const Offset(200, 0));
+      await tester.pump();
+      expect(find.byKey(const Key('swipeIndicator_seek')), findsOneWidget);
+      expect(engine.seeks, isEmpty, reason: 'it jumps when the finger is lifted');
+      await gesture.up();
+      await tester.pump();
+      // 800 px eni = 60 s (video 100 s: choragi 25 s < 1 daqiqa); 200 px = 15 s
+      expect(engine.seeks.last.inSeconds, inInclusiveRange(34, 36));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byKey(const Key('swipeIndicator_seek')), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('right to left: goes back', (tester) async {
+      await open(tester);
+      engine.tick(const Duration(seconds: 60));
+      final gesture = await tester.startGesture(at(tester, 0.8, 0.4));
+      await gesture.moveBy(const Offset(-25, 0));
+      await gesture.moveBy(const Offset(-200, 0));
+      await gesture.up();
+      await tester.pump();
+      expect(engine.seeks.last.inSeconds, inInclusiveRange(44, 46));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('left half, upwards: brighter; downwards: darker', (tester) async {
+      await open(tester);
+      await tester.pump(const Duration(milliseconds: 50));
+      final before = device.bright;
+      await drag(tester, at(tester, 0.2, 0.55), const Offset(0, -120));
+      expect(find.byKey(const Key('swipeIndicator_brightness')), findsOneWidget);
+      expect(device.brightnessSets, isNotEmpty);
+      expect(device.bright, greaterThan(before));
+      expect(device.volumeSets, isEmpty, reason: 'the left half never touches the volume');
+      final up = device.bright;
+      await tester.pump(const Duration(seconds: 1));
+      await drag(tester, at(tester, 0.2, 0.25), const Offset(0, 100));
+      expect(device.bright, lessThan(up));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('right half, upwards: louder; downwards: quieter', (tester) async {
+      await open(tester);
+      await tester.pump(const Duration(milliseconds: 50));
+      final before = device.vol!;
+      await drag(tester, at(tester, 0.8, 0.55), const Offset(0, -120));
+      expect(find.byKey(const Key('swipeIndicator_volume')), findsOneWidget);
+      expect(device.vol!, greaterThan(before));
+      expect(device.brightnessSets, isEmpty, reason: 'the right half never touches the brightness');
+      final up = device.vol!;
+      await tester.pump(const Duration(seconds: 1));
+      await drag(tester, at(tester, 0.8, 0.25), const Offset(0, 100));
+      expect(device.vol!, lessThan(up));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('the brightness is given back when the player is closed', (tester) async {
+      await open(tester);
+      await tester.pumpWidget(const SizedBox());
+      expect(device.brightnessResets, 1);
+    });
+
+    testWidgets('double tap still works next to the swipes', (tester) async {
+      await open(tester);
+      engine.tick(const Duration(seconds: 60));
+      await doubleTapAt(tester, zoneCenter(tester, 0.85));
+      expect(engine.seeks.last, const Duration(seconds: 70));
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpWidget(const SizedBox());
+    });
+  });
+
+  group('one video', () {
+    testWidgets('a repeat button is shown (and no shuffle); it turns repeating on and off', (tester) async {
+      await open(tester, items: videos(1));
+      expect(find.text('Takrorlash'), findsOneWidget);
+      expect(find.byKey(const Key('shuffleButton')), findsNothing);
+      await tester.tap(find.byKey(const Key('repeatButton')));
+      await tester.pump();
+      expect(find.text('Video takrorlanadi'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 2));
+      engine.finish();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(engine.log.takeLast(2), ['seek:0', 'play'], reason: 'plays again by itself');
+      await tester.tap(find.byKey(const Key('repeatButton')));
+      await tester.pump();
+      expect(find.text("Takrorlash o'chirildi"), findsOneWidget);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('when it ends, a big "Qayta ijro" (replay) button appears', (tester) async {
+      await open(tester, items: videos(1));
+      engine.finish();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.byKey(const Key('replayLabel')), findsOneWidget);
+      expect(find.byIcon(Icons.replay_rounded), findsOneWidget);
+      await tester.tap(find.byKey(const Key('playPauseButton')));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(engine.log.takeLast(2), ['seek:0', 'play']);
+      await tester.pumpWidget(const SizedBox());
+    });
+  });
+
+  group('background sound', () {
+    testWidgets('the "Fon" sheet: background sound and the floating window switches', (tester) async {
+      await open(tester);
+      await tester.tap(find.byKey(const Key('backgroundButton')));
+      await tester.pumpAndSettle();
+      expect(find.text('Fon va qalqib chiquvchi oyna'), findsOneWidget);
+      expect(find.text('Fonda ovoz'), findsOneWidget);
+      expect(find.byKey(const Key('autoPipSwitch')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('backgroundAudioSwitch')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(find.byKey(const Key('backgroundAudioSwitch'))).value, isTrue);
+      await tester.ensureVisible(find.byKey(const Key('pipNowButton')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('pipNowButton')));
+      await tester.pumpAndSettle();
+      expect(bridge.pipEntered, 1);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('leaving the app: the video pauses unless background sound is on', (tester) async {
+      await open(tester);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(engine.playing, isFalse);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(engine.playing, isTrue);
+
+      await tester.tap(find.byKey(const Key('backgroundButton')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('backgroundAudioSwitch')));
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(engine.playing, isTrue, reason: 'sound goes on in the background');
+      expect(bridge.foregrounds.last['kind'], 'media');
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('no picture: the decoder is switched and a message is shown', (tester) async {
+      blackScreenTimeout = const Duration(milliseconds: 150);
+      addTearDown(() => blackScreenTimeout = const Duration(seconds: 4));
+      await open(tester);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.textContaining('dekoder avtomatik'), findsOneWidget);
+      expect(engine.decoder, DecoderMode.software);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpWidget(const SizedBox());
+    });
+  });
+
   testWidgets('desktop keyboard: space, arrows, N and P', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;
     await open(tester);
@@ -444,4 +637,8 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     debugDefaultTargetPlatformOverride = null;
   });
+}
+
+extension on List<String> {
+  List<String> takeLast(int n) => sublist(length - n);
 }

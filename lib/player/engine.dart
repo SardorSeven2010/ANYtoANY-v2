@@ -23,7 +23,9 @@ enum DecoderMode {
 String hwdecValue(DecoderMode mode) {
   switch (mode) {
     case DecoderMode.auto:
-      return 'auto-safe';
+      // Android'da "mediacodec-copy" ko'p telefonlarda zero-copy "mediacodec" ga qaraganda barqaror
+      // (ayniqsa H.265 / HEVC da qora ekran chiqmaydi); muvaffaqiyatsiz bo'lsa mpv o'zi dasturiyga o'tadi.
+      return isAndroidApp ? 'mediacodec-copy' : 'auto-safe';
     case DecoderMode.hardware:
       return isAndroidApp ? 'mediacodec' : 'auto';
     case DecoderMode.hardwareCopy:

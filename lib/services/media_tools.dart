@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart' as pdf;
@@ -195,6 +196,53 @@ Future<bool> _runSystemFfmpeg(List<String> args) async {
     return result.exitCode == 0;
   } on ProcessException {
     throw const FfmpegMissingException();
+  }
+}
+
+/// Videoning rasm oqimi haqida qisqa ma'lumot
+class VideoInfo {
+  final String? codec;
+  final int width;
+  final int height;
+  const VideoInfo({this.codec, this.width = 0, this.height = 0});
+  bool get hasPicture => width > 0 && height > 0;
+}
+
+/// Fayldagi birinchi video oqimini aniqlaydi (aniqlab bo'lmasa null). Linux'da tizim ffprobe, boshqa joyda FFprobeKit.
+Future<VideoInfo?> probeVideo(String path) async {
+  try {
+    if (isLinuxApp) {
+      final r = await Process.run("ffprobe", [
+        "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name,width,height",
+        "-of", "csv=p=0", path,
+      ]);
+      if (r.exitCode != 0) return null;
+      final parts = r.stdout.toString().trim().split(",");
+      if (parts.length < 3) return const VideoInfo();
+      return VideoInfo(codec: parts[0], width: int.tryParse(parts[1]) ?? 0, height: int.tryParse(parts[2]) ?? 0);
+    }
+    final session = await FFprobeKit.getMediaInformation(path);
+    final streams = session.getMediaInformation()?.getStreams() ?? const [];
+    for (final st in streams) {
+      if (st.getType() == "video") {
+        return VideoInfo(codec: st.getCodec(), width: st.getWidth() ?? 0, height: st.getHeight() ?? 0);
+      }
+    }
+    return const VideoInfo();
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Tayyor videoning haqiqatan ochilishini tekshiradi: rasm oqimi bor va dastlabki kadrlar dekodlanadi.
+/// Tekshirib bo'lmasa (ffprobe yo'q), true qaytaradi: foydalanuvchining faylini bekorga rad etmaymiz.
+Future<bool> isPlayableVideo(String path) async {
+  final info = await probeVideo(path);
+  if (info != null && !info.hasPicture) return false;
+  try {
+    return await runFfmpeg(["-v", "error", "-i", path, "-frames:v", "3", "-an", "-f", "null", "-"]);
+  } catch (_) {
+    return true;
   }
 }
 

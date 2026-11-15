@@ -9,6 +9,8 @@ import '../widgets/glass.dart';
 import 'browser_screen.dart';
 import 'download_sheets.dart';
 import 'subscription_screen.dart';
+import '../player/play_queue.dart';
+import 'player_screen.dart';
 import 'viewers.dart';
 
 /// Saqlangan joy: "Download/CORE" yoki papka nomi (foydalanuvchi faylni qayerdan topishini bilsin)
@@ -312,7 +314,7 @@ class _JobCard extends StatelessWidget {
                         key: Key("play_${job.id}"),
                         tooltip: "Ijro etish",
                         icon: const Icon(Icons.play_circle_rounded),
-                        onPressed: job.outputPath == null ? null : () => openFile(context, job.outputPath!),
+                        onPressed: job.outputPath == null ? null : () => _play(context),
                       ),
                     if (job.status == JobStatus.failed || job.status == JobStatus.canceled)
                       IconButton(key: Key("retry_${job.id}"), tooltip: "Qayta urinish", icon: const Icon(Icons.refresh_rounded), onPressed: () => manager.retry(job.id)),
@@ -340,6 +342,22 @@ class _JobCard extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// Tayyor yuklashlar navbat bo'ladi: bitta tugagach keyingisi o'zi boshlanadi
+  void _play(BuildContext context) {
+    final done = manager.jobs.where((j) => j.status == JobStatus.done && j.outputPath != null).toList();
+    final index = done.indexWhere((j) => j.id == job.id);
+    if (index < 0) {
+      openFile(context, job.outputPath!);
+      return;
+    }
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => PlayerScreen.queue(
+        items: [for (final j in done) QueueItem(title: j.title, path: j.outputPath)],
+        startIndex: index,
+      ),
+    ));
   }
 
   Future<void> _confirmRemove(BuildContext context) async {

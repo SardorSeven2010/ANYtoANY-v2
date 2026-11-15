@@ -1,13 +1,17 @@
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:any_to_any/player/aspect.dart';
 import 'package:any_to_any/player/controller.dart';
 import 'package:any_to_any/player/engine.dart';
 import 'package:any_to_any/player/play_queue.dart';
+import 'package:any_to_any/services/audio_focus.dart';
 import 'package:any_to_any/services/background.dart';
+import 'package:any_to_any/services/device_controls.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
 
+import 'helpers/fake_device.dart';
 import 'helpers/fake_engine.dart';
 import 'helpers/fake_native.dart';
 
@@ -18,6 +22,21 @@ Future<void> pump() => Future<void>.delayed(Duration.zero);
 void main() {
   late FakeEngine engine;
   late FakeNativeBridge bridge;
+  late FakeDeviceControls device;
+  late FakeAudioFocus focus;
+
+  setUp(() {
+    device = FakeDeviceControls();
+    focus = FakeAudioFocus();
+    setDeviceControls(device);
+    setAudioFocus(focus);
+  });
+
+  tearDown(() {
+    setDeviceControls(null);
+    setAudioFocus(null);
+    blackScreenTimeout = const Duration(seconds: 4);
+  });
 
   Future<PlayerController> make(List<QueueItem> items, {int start = 0, BackgroundCoordinator? bg, Random? random}) async {
     engine = FakeEngine();
@@ -187,7 +206,8 @@ void main() {
 
     test('mpv values per mode', () {
       expect(hwdecValue(DecoderMode.software), 'no');
-      expect(hwdecValue(DecoderMode.auto), 'auto-safe');
+      expect(hwdecValue(DecoderMode.auto), isNotEmpty);
+      expect(hwdecValue(DecoderMode.hardwareCopy), isNotEmpty);
       expect(hwdecValue(DecoderMode.hardware), isNotEmpty);
       expect(DecoderMode.values.map((m) => m.label).toSet().length, DecoderMode.values.length);
     });
@@ -343,7 +363,217 @@ void main() {
     await pump();
     expect(engine.disposed, isTrue);
   });
+
+  group('swipe seeking', () {
+    test('the span of a full-width swipe scales with the video length (1 to 5 minutes)', () {
+      expect(swipeSpan(const Duration(seconds: 100)), const Duration(minutes: 1));
+      expect(swipeSpan(const Duration(minutes: 8)), const Duration(minutes: 2));
+      expect(swipeSpan(const Duration(hours: 3)), const Duration(minutes: 5));
+    });
+
+    test('left to right goes forward by the swiped fraction, right to left goes back', () {
+      const total = Duration(minutes: 40); // 10 min quarter -> capped at 5 min
+      const start = Duration(minutes: 10);
+      expect(swipeSeekTarget(start, 200, 800, total), const Duration(minutes: 10, seconds: 75));
+      expect(swipeSeekTarget(start, -200, 800, total), const Duration(minutes: 8, seconds: 45));
+      expect(swipeSeekTarget(start, 800, 800, total), const Duration(minutes: 15));
+    });
+
+    test('never before the start or past the end', () {
+      const total = Duration(seconds: 100);
+      expect(swipeSeekTarget(const Duration(seconds: 5), -800, 800, total), Duration.zero);
+      expect(swipeSeekTarget(const Duration(seconds: 90), 800, 800, total), total);
+      expect(swipeSeekTarget(const Duration(seconds: 5), 50, 0, total), const Duration(seconds: 5));
+    });
+  });
+
+  group('brightness and volume gestures', () {
+    test('brightness starts from the current value, is clamped and restored on exit', () async {
+      final c = await make(videos(1));
+      await pump();
+      expect(c.brightness, closeTo(0.4, 1e-9));
+      expect(await c.changeBrightness(0.25), closeTo(0.65, 1e-9));
+      expect(device.brightnessSets.last, closeTo(0.65, 1e-9));
+      await c.changeBrightness(5);
+      expect(c.brightness, 1.0);
+      await c.changeBrightness(-5);
+      expect(c.brightness, closeTo(0.02, 1e-9), reason: 'never fully black');
+      c.dispose();
+      expect(device.brightnessResets, 1);
+    });
+
+    test('system volume where available', () async {
+      final c = await make(videos(1));
+      await pump();
+      expect(c.systemVolume, isTrue);
+      expect(c.volume, 0.5);
+      await c.changeVolume(0.3);
+      expect(device.volumeSets.last, closeTo(0.8, 1e-9));
+      await c.changeVolume(-2);
+      expect(c.volume, 0.0);
+      await c.changeVolume(9);
+      expect(c.volume, 1.0);
+    });
+
+    test('where the system volume cannot be changed, the player volume is used', () async {
+      setDeviceControls(FakeDeviceControls(systemVolume: false));
+      final c = await make(videos(1));
+      await pump();
+      expect(c.systemVolume, isFalse);
+      expect(c.volume, 1.0);
+      await c.changeVolume(-0.4);
+      expect(c.volume, closeTo(0.6, 1e-9));
+      expect(engine.log.last, 'volume:60.0');
+    });
+  });
+
+  group('one video: repeat', () {
+    test('a single video is detected and its repeat is a simple on / off switch', () async {
+      final c = await make(videos(1));
+      expect(c.isSingle, isTrue);
+      expect(c.repeatOn, isFalse);
+      c.toggleRepeatSingle();
+      expect(c.queue.repeat, QueueRepeat.one);
+      expect(c.repeatOn, isTrue);
+      engine.finish();
+      await pump();
+      expect(c.ended, isFalse, reason: 'it starts again by itself');
+      expect(engine.log.takeLast(2), ['seek:0', 'play']);
+      c.toggleRepeatSingle();
+      expect(c.repeatOn, isFalse);
+      engine.finish();
+      await pump();
+      expect(c.ended, isTrue);
+      await c.togglePlay();
+      expect(c.ended, isFalse, reason: 'the replay button starts it again');
+    });
+
+    test('more than one video is not "single"', () async {
+      expect((await make(videos(2))).isSingle, isFalse);
+    });
+  });
+
+  group('background audio, app state and phone calls', () {
+    test('by default a video pauses when the app is hidden and resumes when it is back', () async {
+      final c = await make(videos(1));
+      expect(c.backgroundAudio, isFalse);
+      c.onAppLifecycle(AppLifecycleState.paused);
+      await pump();
+      expect(c.playing, isFalse);
+      c.onAppResumed();
+      await pump();
+      expect(c.playing, isTrue);
+    });
+
+    test('with "Fonda ovoz" on, the sound keeps playing after leaving the app', () async {
+      final c = await make(videos(1));
+      c.setBackgroundAudio(true);
+      c.onAppLifecycle(AppLifecycleState.paused);
+      await pump();
+      expect(c.playing, isTrue);
+    });
+
+    test('a song keeps playing in the background without the switch', () async {
+      final c = await make([const QueueItem(title: 'a.mp3', path: '/m/a.mp3')]);
+      c.onAppLifecycle(AppLifecycleState.paused);
+      await pump();
+      expect(c.playing, isTrue);
+    });
+
+    test('inside the floating window the video is not paused', () async {
+      final c = await make(videos(1));
+      bridge.emit('pipChanged', true);
+      await pump();
+      c.onAppLifecycle(AppLifecycleState.paused);
+      await pump();
+      expect(c.playing, isTrue);
+    });
+
+    test('resume does not start something the user paused', () async {
+      final c = await make(videos(1));
+      await c.togglePlay();
+      c.onAppLifecycle(AppLifecycleState.paused);
+      c.onAppResumed();
+      await pump();
+      expect(c.playing, isFalse);
+    });
+
+    test('auto floating window can be switched off', () async {
+      final c = await make(videos(1));
+      expect(bridge.pipArmed, isTrue);
+      c.setAutoPip(false);
+      expect(bridge.pipArmed, isFalse);
+      c.setAutoPip(true);
+      expect(bridge.pipArmed, isTrue);
+    });
+
+    test('a phone call / another player pauses and resumes it; unplugging headphones pauses', () async {
+      final c = await make(videos(1));
+      expect(focus.activated, 1);
+      focus.emit(AudioFocusEvent.pause);
+      await pump();
+      expect(c.playing, isFalse);
+      focus.emit(AudioFocusEvent.resume);
+      await pump();
+      expect(c.playing, isTrue);
+      // foydalanuvchi o'zi to'xtatgan bo'lsa, qo'ng'iroqdan keyin o'zi boshlanmaydi
+      await c.togglePlay();
+      focus.emit(AudioFocusEvent.pause);
+      focus.emit(AudioFocusEvent.resume);
+      await pump();
+      expect(c.playing, isFalse);
+      c.dispose();
+      expect(focus.deactivated, 1);
+    });
+  });
+
+  group('black screen (for example H.265): the decoder is switched automatically', () {
+    test('no picture size after a few seconds -> the next decoder, same position, with a notice', () async {
+      blackScreenTimeout = const Duration(milliseconds: 150);
+      final c = await make(videos(1));
+      engine.tick(const Duration(seconds: 12));
+      await Future<void>.delayed(const Duration(milliseconds: 220));
+      expect(c.decoder, DecoderMode.software, reason: 'on Android "auto" is already hardware-copy');
+      expect(engine.decoder, DecoderMode.software);
+      expect(engine.opened.last.start, const Duration(seconds: 12));
+      expect(c.notice.value, contains('dekoder avtomatik'));
+    });
+
+    test('the desktop chain goes auto -> hardware copy -> software', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      blackScreenTimeout = const Duration(milliseconds: 150);
+      final c = await make(videos(1));
+      await Future<void>.delayed(const Duration(milliseconds: 220));
+      expect(c.decoder, DecoderMode.hardwareCopy);
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(c.decoder, DecoderMode.software);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(c.notice.value, contains("ko'rinmadi"), reason: 'nothing left to try: say so');
+      expect(engine.opened.length, 3, reason: 'opened once at start and once per switch');
+    });
+
+    test('a picture that has a size is left alone; so are audio files and paused videos', () async {
+      blackScreenTimeout = const Duration(milliseconds: 40);
+      final c = await make(videos(1));
+      engine.setSize(1920, 1080);
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      expect(c.decoder, DecoderMode.auto);
+      expect(engine.opened.length, 1);
+
+      final audio = await make([const QueueItem(title: 'a.mp3', path: '/m/a.mp3')]);
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      expect(audio.decoder, DecoderMode.auto);
+
+      final paused = await make(videos(1));
+      await paused.togglePlay();
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      expect(paused.decoder, DecoderMode.auto, reason: 'a paused video shows no frame yet');
+    });
+  });
+
 }
+
 
 extension on List<String> {
   List<String> takeLast(int n) => sublist(length - n);
