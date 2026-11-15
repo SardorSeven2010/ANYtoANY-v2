@@ -257,18 +257,24 @@ void main() {
       await pump();
       expect(job.inGallery, isFalse);
       final calls = <String>[];
+      // Galereyadagi nusxa: haqiqiy fayl (restartdan keyin tarixda faqat mavjud fayllar qoladi)
+      final copy = File('${dir.path}/Movies/CORE/eski.mp4')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync([1, 2, 3]);
       galleryPublisher = (path, kind, {name}) async {
         calls.add('${kind.name}:$name');
-        return const GalleryResult('/storage/emulated/0/Movies/CORE/eski.mp4', inGallery: true);
+        return GalleryResult(copy.path, inGallery: true);
       };
       expect(await m.addToGallery(job.id), "Galereyaga qo'shildi");
       expect(calls, ['video:eski.mp4']);
       expect(job.inGallery, isTrue);
-      expect(job.outputPath, '/storage/emulated/0/Movies/CORE/eski.mp4');
+      expect(job.outputPath, copy.path);
       // restartdan keyin ham saqlanadi
       final again = DownloadManager(runner: runner.call, log: log, bridge: bridge, background: bg, outDir: () async => dir);
-      File(job.outputPath!).parent.createSync(recursive: true);
       await again.load();
+      final restored = again.jobs.firstWhere((j) => j.title == 'eski');
+      expect(restored.inGallery, isTrue);
+      expect(restored.outputPath, copy.path);
       again.dispose();
     });
 
