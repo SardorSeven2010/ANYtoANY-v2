@@ -6,14 +6,23 @@ import 'package:pdfx/pdfx.dart' as pdfx;
 import '../app_theme.dart';
 import '../platform.dart';
 import '../services/media_tools.dart';
+import '../player/play_queue.dart';
 import 'player_screen.dart';
 
 /// Faylni turiga qarab ochadi: video/audio - pleyerda, PDF va rasm - ko'rish oynasida.
-void openFile(BuildContext context, String path) {
+void openFile(BuildContext context, String path, {List<String>? playlist}) {
   final name = fileNameOf(path);
   Widget? screen;
   if (isPlayableFile(name)) {
-    screen = PlayerScreen(path: path, title: name);
+    // Ro'yxatdagi boshqa video / audio fayllar bilan navbat: biri tugagach keyingisi o'zi boshlanadi
+    final queue = [
+      for (final p in playlist ?? const <String>[])
+        if (isPlayableFile(fileNameOf(p))) p,
+    ];
+    final index = queue.indexOf(path);
+    screen = (queue.length > 1 && index >= 0)
+        ? PlayerScreen.queue(items: [for (final p in queue) QueueItem(title: fileNameOf(p), path: p)], startIndex: index)
+        : PlayerScreen(path: path, title: name);
   } else if (isPdfFile(name)) {
     screen = PdfViewerScreen(pdfPath: path, fileName: name);
   } else if (isImageFile(name)) {

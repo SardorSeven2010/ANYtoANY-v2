@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../browser/backend.dart';
 import '../downloader/detected.dart';
 import '../downloader/manager.dart';
+import '../services/background.dart';
+import '../services/native_bridge.dart';
 import 'download_sheets.dart';
 
 /// Havola kiritilgan matnni manzilga aylantiradi: manzil bo'lmasa qidiruv.
@@ -11,7 +15,9 @@ Uri addressFromInput(String input) {
   if (text.isEmpty) return Uri.parse("about:blank");
   final hasScheme = RegExp(r'^[a-zA-Z][a-zA-Z0-9+.-]*://').hasMatch(text);
   if (hasScheme) return Uri.parse(text);
-  final looksLikeHost = !text.contains(' ') && RegExp(r'^[^\s/]+\.[a-zA-Z]{2,}([/:?#].*)?$').hasMatch(text);
+  final looksLikeHost =
+      !text.contains(' ') &&
+      RegExp(r'^[^\s/]+\.[a-zA-Z]{2,}([/:?#].*)?$').hasMatch(text);
   if (looksLikeHost) return Uri.parse("https://$text");
   return Uri.https("duckduckgo.com", "/", {"q": text});
 }
@@ -23,14 +29,22 @@ class BrowserScreen extends StatefulWidget {
   final BrowserBackend? backend; // testlar uchun
   final MediaDetector? detector;
   final DownloadManager? manager;
-  const BrowserScreen({super.key, this.initial, this.backend, this.detector, this.manager});
+  const BrowserScreen({
+    super.key,
+    this.initial,
+    this.backend,
+    this.detector,
+    this.manager,
+  });
 
   @override
   State<BrowserScreen> createState() => _BrowserScreenState();
 }
 
-class _BrowserScreenState extends State<BrowserScreen> {
-  late final BrowserBackend _browser = widget.backend ?? browserBackendFactory();
+class _BrowserScreenState extends State<BrowserScreen>
+    with WidgetsBindingObserver {
+  late final BrowserBackend _browser =
+      widget.backend ?? browserBackendFactory();
   late final MediaDetector _detector = widget.detector ?? MediaDetector();
   final TextEditingController _address = TextEditingController();
   final FocusNode _focus = FocusNode();
@@ -41,13 +55,18 @@ class _BrowserScreenState extends State<BrowserScreen> {
   bool _canBack = false;
   bool _canForward = false;
   String _pageUrl = "";
+  StreamSubscription<NativeEvent>? _nativeSub;
+  bool _notified = false;
 
   @override
   void initState() {
     super.initState();
     _browser.onPageStarted = (url) {
       // yangi sahifa: oldingi sahifaning videolari ro'yxatdan olib tashlanadi
-      if (_stripHash(url) != _stripHash(_pageUrl)) _detector.reset();
+      if (_stripHash(url) != _stripHash(_pageUrl)) {
+        _detector.reset();
+        _clearNotification(); // yangi sahifa: video haqida eski bildirishnoma o'chadi
+      }
       _pageUrl = url;
       if (!_focus.hasFocus) _address.text = url;
       if (mounted) setState(() => _loading = true);
@@ -63,6 +82,10 @@ class _BrowserScreenState extends State<BrowserScreen> {
       if (mounted) setState(() => _progress = p);
     };
     _browser.onMessage = _detector.onMessage;
+    _browser.onMedia = _onMedia;
+    WidgetsBinding.instance.addObserver(this);
+    // bildirishnomadagi pleyer tugmalari sahifadagi videoni boshqaradi
+    _nativeSub = nativeBridge.events.listen(_onNativeEvent);
     final initial = widget.initial;
     if (initial != null) {
       _started = true;
@@ -76,14 +99,63 @@ class _BrowserScreenState extends State<BrowserScreen> {
   Future<void> _refreshNav() async {
     final back = await _browser.canGoBack();
     final fwd = await _browser.canGoForward();
-    if (mounted) setState(() {
-      _canBack = back;
-      _canForward = fwd;
-    });
+    if (mounted)
+      setState(() {
+        _canBack = back;
+        _canForward = fwd;
+      });
+  }
+
+  /// Sahifadagi video o'ynay boshlasa: bildirishnomada pleyer va fon xizmati (ekran o'chganda ham ovoz davom etadi)
+  void _onMedia(BrowserMedia m) {
+    if (!mounted) return;
+    if (!m.hasMedia) {
+      _clearNotification();
+      return;
+    }
+    _notified = true;
+    final title = m.title.trim().isEmpty ? "Mini-brauzer" : m.title.trim();
+    backgroundService.setMedia(
+      MediaInfo(title: title, subtitle: "Mini-brauzer", playing: m.playing),
+    );
+  }
+
+  void _clearNotification() {
+    if (!_notified) return;
+    _notified = false;
+    backgroundService.setMedia(null);
+  }
+
+  void _onNativeEvent(NativeEvent e) {
+    if (e.name != 'mediaAction') return;
+    switch (e.data) {
+      case 'play':
+        _browser.mediaCommand('play');
+      case 'pause':
+      case 'stop':
+        _browser.mediaCommand('pause');
+      case 'playpause':
+        _browser.mediaCommand('toggle');
+      case 'next':
+        _browser.mediaCommand('next');
+      case 'previous':
+        _browser.mediaCommand('previous');
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // ilova fonda: sayt videoni o'zi to'xtatmasin va keyingi videoga to'xtamay o'tsin
+    _browser.setBackground(
+      state == AppLifecycleState.paused || state == AppLifecycleState.hidden,
+    );
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _nativeSub?.cancel();
+    _clearNotification();
     _browser.dispose();
     _address.dispose();
     _focus.dispose();
@@ -141,7 +213,8 @@ class _BrowserScreenState extends State<BrowserScreen> {
         if (!didPop && _canBack) _browser.goBack().then((_) => _refreshNav());
       },
       child: Scaffold(
-        backgroundColor: scheme.surface, // Liquid Glass uslubida Scaffold shaffof: brauzerga zich fon kerak
+        backgroundColor: scheme
+            .surface, // Liquid Glass uslubida Scaffold shaffof: brauzerga zich fon kerak
         appBar: AppBar(
           titleSpacing: 0,
           title: TextField(
@@ -169,7 +242,10 @@ class _BrowserScreenState extends State<BrowserScreen> {
           bottom: _loading
               ? PreferredSize(
                   preferredSize: const Size.fromHeight(3),
-                  child: LinearProgressIndicator(value: _progress <= 0 ? null : _progress / 100, minHeight: 3),
+                  child: LinearProgressIndicator(
+                    value: _progress <= 0 ? null : _progress / 100,
+                    minHeight: 3,
+                  ),
                 )
               : null,
         ),
@@ -190,16 +266,28 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 key: const Key("browserBack"),
                 tooltip: "Orqaga",
                 icon: const Icon(Icons.arrow_back_rounded),
-                onPressed: _canBack ? () => _browser.goBack().then((_) => _refreshNav()) : null,
+                onPressed: _canBack
+                    ? () => _browser.goBack().then((_) => _refreshNav())
+                    : null,
               ),
               IconButton(
                 key: const Key("browserForward"),
                 tooltip: "Oldinga",
                 icon: const Icon(Icons.arrow_forward_rounded),
-                onPressed: _canForward ? () => _browser.goForward().then((_) => _refreshNav()) : null,
+                onPressed: _canForward
+                    ? () => _browser.goForward().then((_) => _refreshNav())
+                    : null,
               ),
-              IconButton(tooltip: "Yangilash", icon: const Icon(Icons.refresh_rounded), onPressed: _started ? _browser.reload : null),
-              IconButton(tooltip: "Yopish", icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.of(context).maybePop()),
+              IconButton(
+                tooltip: "Yangilash",
+                icon: const Icon(Icons.refresh_rounded),
+                onPressed: _started ? _browser.reload : null,
+              ),
+              IconButton(
+                tooltip: "Yopish",
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
             ],
           ),
         ),
@@ -237,9 +325,17 @@ class _BrowserScreenState extends State<BrowserScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.travel_explore_rounded, size: 72, color: scheme.primary),
+              Icon(
+                Icons.travel_explore_rounded,
+                size: 72,
+                color: scheme.primary,
+              ),
               const SizedBox(height: 14),
-              const Text("Videoni toping va yuklang", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
+              const Text(
+                "Videoni toping va yuklang",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 8),
               Text(
                 "Yuqoriga sayt manzilini yozing yoki qidiring. Sahifada video o'ynay boshlaganda \"Yuklash\" tugmasi paydo bo'ladi.",
@@ -273,31 +369,53 @@ class _DetectedList extends StatelessWidget {
       builder: (context, _) {
         final items = detector.items;
         return ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.8),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+          ),
           child: ListView(
             shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             children: [
-              Text("Topilgan videolar (${items.length})", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              Text(
+                "Topilgan videolar (${items.length})",
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               const SizedBox(height: 10),
-              if (items.isEmpty) const Text("Hozircha video topilmadi. Videoni ijro eting."),
+              if (items.isEmpty)
+                const Text("Hozircha video topilmadi. Videoni ijro eting."),
               for (var i = 0; i < items.length; i++)
                 Card(
                   key: Key("detected_$i"),
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
                     leading: Icon(
-                      items[i].downloadable ? Icons.movie_rounded : Icons.lock_rounded,
-                      color: items[i].downloadable ? scheme.primary : scheme.error,
+                      items[i].downloadable
+                          ? Icons.movie_rounded
+                          : Icons.lock_rounded,
+                      color: items[i].downloadable
+                          ? scheme.primary
+                          : scheme.error,
                     ),
                     title: Text(
-                      items[i].pageTitle.isEmpty ? items[i].url.pathSegments.lastWhere((s) => s.isNotEmpty, orElse: () => items[i].url.host) : items[i].pageTitle,
+                      items[i].pageTitle.isEmpty
+                          ? items[i].url.pathSegments.lastWhere(
+                              (s) => s.isNotEmpty,
+                              orElse: () => items[i].url.host,
+                            )
+                          : items[i].pageTitle,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: Text(_subtitle(items[i])),
-                    trailing: items[i].downloadable ? const Icon(Icons.download_rounded) : null,
-                    onTap: items[i].downloadable ? () => onPick(items[i]) : null,
+                    trailing: items[i].downloadable
+                        ? const Icon(Icons.download_rounded)
+                        : null,
+                    onTap: items[i].downloadable
+                        ? () => onPick(items[i])
+                        : null,
                   ),
                 ),
               if (items.any((m) => m.kind == DetectedKind.blob))

@@ -485,7 +485,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
             IconButton(
               icon: Icon(openIcon(file.name)),
               tooltip: "Ochish",
-              onPressed: () => openFile(context, path),
+              onPressed: () => openFile(context, path, playlist: _results),
             ),
           IconButton(
             icon: const Icon(Icons.close_rounded),
@@ -507,7 +507,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
           ? IconButton(
               icon: Icon(openIcon(name)),
               tooltip: "Ochish",
-              onPressed: () => openFile(context, path),
+              onPressed: () => openFile(context, path, playlist: _results),
             )
           : null,
     );

@@ -10,9 +10,13 @@ Android, iPhone, Windows va Linux uchun.
   oxirigacha ijro etib to'xtash; chap / o'rta / o'ng tomonni 2 marta bosish (10 s orqaga / pauza / 10 s oldinga);
   tezlik 0.25x-4x; apparat va dasturiy dekoder; 16:9, 19.5:9, 21:9, 4:3 va boshqa video o'lchamlari;
   skrinshot; ekranni burish; qalqib chiquvchi oyna (Android); fonda ijro va bildirishnoma tugmalari.
+  Surish jestlari: videoni chapdan o'ngga surilsa oldinga, o'ngdan chapga surilsa orqaga; chap yarmida yuqoriga/pastga
+  surilsa yorug'lik, o'ng yarmida ovoz. "Fon" tugmasi: ilovadan chiqqanda ham ovoz davom etadi va bildirishnomada
+  to'liq pleyer chiqadi. Bitta video uchun takrorlash tugmasi. Rasm chiqmasa dekoder avtomatik almashadi.
 - **Video yuklagich**: mini-brauzer, sahifadagi videoni o'zi topadi ("Yuklash" tugmasi paydo bo'ladi),
   `.mp4`, HLS (`.m3u8`, AES-128), DASH (`.mpd`); 6 dan 18 gacha parallel bo'lakka bo'lib yuklash;
-  hamma narsa qurilmaning o'zida (serverga hech narsa yuborilmaydi).
+  hamma narsa qurilmaning o'zida (serverga hech narsa yuborilmaydi). Tayyor video galereyada ko'rinadi
+  (Android: Movies/CORE, iPhone: Rasmlar). Brauzerdagi video ekran o'chganda ham o'ynaydi (bildirishnomada pleyer).
 - **Tarif**: yangi foydalanuvchiga 1 oy tekin PRO (bir qurilmaga bir marta), keyin 1 / 3 / 6 / 9 / 12 oylik.
   PRO: cheksiz yuklash, 18 bo'lak, H.264 / H.265 tanlash, barcha kodeklar, PDF konvertatsiyalari,
   ilova nomini o'zgartirish. Bepul: haftasiga 10 ta yuklash, 6 bo'lak.

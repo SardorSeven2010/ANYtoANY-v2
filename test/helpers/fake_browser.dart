@@ -7,6 +7,8 @@ class FakeBrowser extends BrowserBackend {
   final List<String> history = [];
   int index = -1;
   bool reloaded = false;
+  final List<String> commands = [];
+  bool background = false;
 
   @override
   Widget view() => const ColoredBox(key: Key('fakeWebView'), color: Colors.white);
@@ -51,6 +53,16 @@ class FakeBrowser extends BrowserBackend {
   Future<bool> canGoBack() async => index > 0;
   @override
   Future<bool> canGoForward() async => index < history.length - 1;
+  @override
+  Future<void> mediaCommand(String command) async => commands.add(command);
+
+  @override
+  Future<void> setBackground(bool on) async => background = on;
+
+  /// Sahifadagi video holatini taqlid qiladi
+  void media({required bool playing, bool hasMedia = true, String title = ''}) =>
+      onMedia?.call(BrowserMedia(playing: playing, hasMedia: hasMedia, title: title));
+
   @override
   Future<String?> currentUrl() async => index >= 0 ? history[index] : null;
 
