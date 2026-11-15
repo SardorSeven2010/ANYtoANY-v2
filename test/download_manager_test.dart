@@ -6,6 +6,7 @@ import 'package:any_to_any/downloader/common.dart';
 import 'package:any_to_any/downloader/job_runner.dart';
 import 'package:any_to_any/downloader/manager.dart';
 import 'package:any_to_any/services/background.dart';
+import 'package:any_to_any/services/gallery.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -242,6 +243,65 @@ void main() {
       expect(bridge.notifications.last['title'], 'Yuklandi');
       expect(bridge.notifications.last['body'], 'movie');
       expect(bridge.calls.last, 'stopForeground', reason: 'nothing left to download: the service stops');
+    });
+  });
+
+  group('gallery', () {
+    tearDown(() => galleryPublisher = publishToGallery);
+
+    test('an old video that is not in the gallery can be added later; the job then points at the gallery copy', () async {
+      final f = File('${dir.path}/eski.mp4')..writeAsBytesSync([1, 2, 3]);
+      final job = (await m.start(req('eski'), pro: true)).job!;
+      await pump();
+      runner.finish(0, f.path, bytes: 3);
+      await pump();
+      expect(job.inGallery, isFalse);
+      final calls = <String>[];
+      galleryPublisher = (path, kind, {name}) async {
+        calls.add('${kind.name}:$name');
+        return const GalleryResult('/storage/emulated/0/Movies/CORE/eski.mp4', inGallery: true);
+      };
+      expect(await m.addToGallery(job.id), "Galereyaga qo'shildi");
+      expect(calls, ['video:eski.mp4']);
+      expect(job.inGallery, isTrue);
+      expect(job.outputPath, '/storage/emulated/0/Movies/CORE/eski.mp4');
+      // restartdan keyin ham saqlanadi
+      final again = DownloadManager(runner: runner.call, log: log, bridge: bridge, background: bg, outDir: () async => dir);
+      File(job.outputPath!).parent.createSync(recursive: true);
+      await again.load();
+      again.dispose();
+    });
+
+    test('when the gallery refuses, the job keeps its file and the reason is shown', () async {
+      final f = File('${dir.path}/x.mp4')..writeAsBytesSync([1]);
+      final job = (await m.start(req('x'), pro: true)).job!;
+      await pump();
+      runner.finish(0, f.path, bytes: 1);
+      await pump();
+      galleryPublisher = (path, kind, {name}) async => GalleryResult(path, inGallery: false, note: "Galereyaga qo'shib bo'lmadi. Fayl: $path");
+      expect(await m.addToGallery(job.id), contains("qo'shib bo'lmadi"));
+      expect(job.inGallery, isFalse);
+      expect(job.outputPath, f.path);
+    });
+
+    test('missing file, unknown job and unfinished jobs give a clear answer', () async {
+      expect(await m.addToGallery('yoq'), 'Fayl topilmadi');
+      final job = (await m.start(req('y'), pro: true)).job!;
+      await pump();
+      expect(await m.addToGallery(job.id), 'Fayl topilmadi', reason: 'still downloading');
+      runner.finish(0, '${dir.path}/never_created.mp4');
+      await pump();
+      expect(await m.addToGallery(job.id), contains("o'chirilgan"));
+    });
+
+    test('a finished download reports where it is saved and a warning (for example H.265 fallback)', () async {
+      final f = File('${dir.path}/h.mp4')..writeAsBytesSync([1]);
+      final job = (await m.start(req('h'), pro: true)).job!;
+      await pump();
+      runner.pending[0].complete(JobResult(f.path, 1, 6, inGallery: true, note: "H.265 kodlash muvaffaqiyatsiz bo'ldi: video H.264 formatida saqlandi"));
+      await pump();
+      expect(job.inGallery, isTrue);
+      expect(job.note, contains('H.264'));
     });
   });
 

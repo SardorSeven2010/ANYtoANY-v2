@@ -7,7 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config.dart';
+import '../platform.dart';
 import '../services/background.dart';
+import '../services/gallery.dart';
 import '../services/media_tools.dart';
 import '../services/native_bridge.dart';
 import 'common.dart';
@@ -339,6 +341,26 @@ class DownloadManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Galereyada ko'rinmayotgan tayyor videoni (masalan, eski versiyada yuklangan) galereyaga qo'shadi.
+  /// Qaytaradi: foydalanuvchiga ko'rsatiladigan natija xabari.
+  Future<String> addToGallery(String id) async {
+    final job = _find(id);
+    final path = job?.outputPath;
+    if (job == null || job.status != JobStatus.done || path == null) return "Fayl topilmadi";
+    if (!await File(path).exists()) return "Fayl topilmadi. U o'chirilgan bo'lishi mumkin.";
+    final result = await galleryPublisher(path, GalleryKind.video, name: lastSegment(path));
+    if (result.inGallery) {
+      job.outputPath = result.path;
+      job.inGallery = true;
+      job.note = null;
+      job.touch();
+      await _saveHistory();
+      notifyListeners();
+      return "Galereyaga qo'shildi";
+    }
+    return result.note ?? "Galereyaga qo'shib bo'lmadi";
+  }
+
   DownloadJob? _find(String id) {
     for (final j in _jobs) {
       if (j.id == id) return j;
@@ -393,6 +415,7 @@ class DownloadManager extends ChangeNotifier {
           ..error = item['error'] as String?
           ..outputPath = item['path'] as String?
           ..outputBytes = item['bytes'] as int?
+          ..inGallery = item['inGallery'] == true
           ..finishedAt = DateTime.tryParse(item['finishedAt'] as String? ?? '');
         // fayl o'chirib yuborilgan bo'lsa, "tayyor" deb ko'rsatilmaydi
         if (status == JobStatus.done && job.outputPath != null && !File(job.outputPath!).existsSync()) continue;
@@ -417,6 +440,7 @@ class DownloadManager extends ChangeNotifier {
                 'status': j.status.name,
                 'error': j.error,
                 'path': j.outputPath,
+                'inGallery': j.inGallery,
                 'bytes': j.outputBytes,
                 'createdAt': j.createdAt.toIso8601String(),
                 'finishedAt': j.finishedAt?.toIso8601String(),

@@ -13,6 +13,7 @@ import 'package:any_to_any/screens/download_sheets.dart';
 import 'package:any_to_any/screens/downloader_tab.dart';
 import 'package:any_to_any/screens/subscription_screen.dart';
 import 'package:any_to_any/services/background.dart';
+import 'package:any_to_any/services/gallery.dart';
 import 'package:any_to_any/services/native_bridge.dart';
 import 'package:any_to_any/services/profile_service.dart';
 import 'package:flutter/foundation.dart';
@@ -336,6 +337,35 @@ void main() {
       }
       expect(manager.jobs, isEmpty);
       expect(f.existsSync(), isFalse);
+    });
+
+    testWidgets('a finished video shows where it is, offers "add to gallery" when it is not there, and plays as a queue', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      final a = File('${dir.path}/a.mp4')..writeAsBytesSync([1]);
+      final b = File('${dir.path}/b.mp4')..writeAsBytesSync([1]);
+      await pumpApp(tester, DownloaderTab(manager: manager, detector: detector));
+      final j1 = (await manager.start(DownloadRequest(url: Uri.parse('https://cdn.test/a.mp4'), title: 'Birinchi'), pro: true)).job!;
+      final j2 = (await manager.start(DownloadRequest(url: Uri.parse('https://cdn.test/b.mp4'), title: 'Ikkinchi'), pro: true)).job!;
+      await tester.pump(const Duration(milliseconds: 50));
+      runner.pending[0].complete(JobResult(a.path, 1, 6, inGallery: true));
+      runner.pending[1].complete(JobResult(b.path, 1, 6));
+      await settle(tester);
+      expect(tester.widget<Text>(find.byKey(Key('detail_${j1.id}'))).data, contains('Galereyada'));
+      expect(find.byKey(Key('gallery_${j1.id}')), findsNothing, reason: 'already in the gallery');
+      expect(find.byKey(Key('gallery_${j2.id}')), findsOneWidget);
+      galleryPublisher = (path, kind, {name}) async => const GalleryResult('/storage/emulated/0/Movies/CORE/b.mp4', inGallery: true);
+      addTearDown(() => galleryPublisher = publishToGallery);
+      await tester.tap(find.byKey(Key('gallery_${j2.id}')));
+      // fayl mavjudligi haqiqiy diskdan tekshiriladi
+      for (var i = 0; i < 4; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80)));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.text("Galereyaga qo'shildi"), findsOneWidget);
+      expect(find.byKey(Key('gallery_${j2.id}')), findsNothing);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpWidget(const SizedBox());
+      debugDefaultTargetPlatformOverride = null;
     });
 
     testWidgets('PRO users see the unlimited label', (tester) async {

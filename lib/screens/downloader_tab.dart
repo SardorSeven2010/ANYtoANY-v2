@@ -318,6 +318,17 @@ class _JobCard extends StatelessWidget {
                       ),
                     if (job.status == JobStatus.failed || job.status == JobStatus.canceled)
                       IconButton(key: Key("retry_${job.id}"), tooltip: "Qayta urinish", icon: const Icon(Icons.refresh_rounded), onPressed: () => manager.retry(job.id)),
+                    if (done && !job.inGallery && (isAndroidApp || isIOSApp))
+                      IconButton(
+                        key: Key("gallery_${job.id}"),
+                        tooltip: "Galereyaga qo'shish",
+                        icon: const Icon(Icons.photo_library_outlined),
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          final text = await manager.addToGallery(job.id);
+                          messenger.showSnackBar(SnackBar(content: Text(text)));
+                        },
+                      ),
                     if (job.isFinished)
                       IconButton(
                         key: Key("remove_${job.id}"),
