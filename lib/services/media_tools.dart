@@ -12,6 +12,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:pdfx/pdfx.dart' as pdfx;
 
 import '../platform.dart';
+import 'gallery.dart';
 
 const String publicDownloadDir = '/storage/emulated/0/Download';
 
@@ -370,9 +371,14 @@ Future<String?> imageToPdf(String imagePath, String ext, String outPath) async {
 
 class ConvertOutcome {
   final List<String> outputs;
+
+  /// Natija galereyaga (MediaStore / Rasmlar) qo'shildimi
+  final bool inGallery;
   final String? error;
-  const ConvertOutcome.ok(this.outputs) : error = null;
-  const ConvertOutcome.failed(this.error) : outputs = const [];
+  const ConvertOutcome.ok(this.outputs, {this.inGallery = false}) : error = null;
+  const ConvertOutcome.failed(this.error)
+      : outputs = const [],
+        inGallery = false;
 }
 
 /// Bitta faylni aylantiradi
@@ -422,7 +428,15 @@ Future<ConvertOutcome> convertFile({
     videoCodec: videoCodec,
     audioBitrate: audioBitrate,
   ));
-  if (ok) return ConvertOutcome.ok([outPath]);
+  if (ok) {
+    // video, audio va rasm natijalari galereyada ko'rinishi uchun
+    final kind = galleryKindOf(outPath);
+    if (kind != null) {
+      final published = await galleryPublisher(outPath, kind, name: lastSegment(outPath));
+      return ConvertOutcome.ok([published.path], inGallery: published.inGallery);
+    }
+    return ConvertOutcome.ok([outPath]);
+  }
   await deleteQuietly(outPath);
   return ConvertOutcome.failed("bu faylni .$format ga aylantirib bo'lmadi");
 }

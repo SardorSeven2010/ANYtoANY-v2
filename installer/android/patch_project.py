@@ -59,6 +59,7 @@ permissions = ["android.permission.INTERNET"] if admin else [
         "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.WAKE_LOCK",
+        "android.permission.ACCESS_WIFI_STATE",
     ]
 perm_xml = "".join(f'    <uses-permission android:name="{p}"/>\n' for p in permissions)
 manifest = manifest.replace("<application", perm_xml + "    <application", 1)

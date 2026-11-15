@@ -184,6 +184,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
     final errors = <String>[];
     final outputs = <String>[];
     int done = 0;
+    bool anyInGallery = false;
     String savedTo = "";
     try {
       final outDir = await resolveOutputDir();
@@ -214,6 +215,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
               );
               error = outcome.error;
               outputs.addAll(outcome.outputs);
+              if (outcome.inGallery) anyInGallery = true;
             }
           } catch (e) {
             error = "$e";
@@ -243,6 +245,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
       }
     }
 
+    if (anyInGallery) savedTo = isIOSApp ? "Rasmlar kutubxonasiga va Fayllar ilovasiga" : "galereyaga (CORE papkasi)";
     String message = done > 0 ? "Tayyor! $done ta fayl $savedTo saqlandi." : "Hech bir fayl aylantirilmadi.";
     if (errors.isNotEmpty) {
       final String firstError =

@@ -84,4 +84,25 @@ class FakeNativeBridge implements NativeBridge {
     pinned = label;
     return true;
   }
+
+  // ---- galereya va ovoz ----
+  final List<Map<String, String?>> gallerySaves = [];
+  String? Function(String path)? galleryResult; // null qaytarsa saqlab bo'lmadi
+  double? systemVolume = 0.5;
+  final List<double> volumeSets = [];
+
+  @override
+  Future<String?> saveToGallery({required String path, required String kind, String? name}) async {
+    gallerySaves.add({'path': path, 'kind': kind, 'name': name});
+    return galleryResult == null ? '/storage/emulated/0/Movies/CORE/${name ?? path.split('/').last}' : galleryResult!(path);
+  }
+
+  @override
+  Future<double?> getSystemVolume() async => systemVolume;
+
+  @override
+  Future<void> setSystemVolume(double value) async {
+    volumeSets.add(value);
+    systemVolume = value;
+  }
 }

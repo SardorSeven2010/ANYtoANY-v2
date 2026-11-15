@@ -51,6 +51,14 @@ abstract class NativeBridge {
 
   /// Asosiy ekranga berilgan nomli yorliq qo'shishni so'raydi (PRO)
   Future<bool> pinShortcut(String label);
+
+  /// Faylni galereyaga (MediaStore) nusxalaydi. kind: video, audio yoki image.
+  /// Qaytaradi: galereyadagi fayl yo'li (bo'lmasa null). Asl fayl o'chirilmaydi.
+  Future<String?> saveToGallery({required String path, required String kind, String? name});
+
+  /// Tizim media ovozi 0..1 (qo'llab-quvvatlanmasa null)
+  Future<double?> getSystemVolume();
+  Future<void> setSystemVolume(double value);
 }
 
 class NoopNativeBridge implements NativeBridge {
@@ -85,6 +93,12 @@ class NoopNativeBridge implements NativeBridge {
   Future<void> setPipArmed(bool armed, {int width = 16, int height = 9}) async {}
   @override
   Future<bool> pinShortcut(String label) async => false;
+  @override
+  Future<String?> saveToGallery({required String path, required String kind, String? name}) async => null;
+  @override
+  Future<double?> getSystemVolume() async => null;
+  @override
+  Future<void> setSystemVolume(double value) async {}
 }
 
 class MethodChannelNativeBridge implements NativeBridge {
@@ -142,6 +156,26 @@ class MethodChannelNativeBridge implements NativeBridge {
       _call<bool>('setPipArmed', false, {'armed': armed, 'width': width, 'height': height});
   @override
   Future<bool> pinShortcut(String label) => _call('pinShortcut', false, {'label': label});
+  @override
+  Future<String?> saveToGallery({required String path, required String kind, String? name}) async {
+    try {
+      return await _channel.invokeMethod<String>('saveToGallery', {'path': path, 'kind': kind, 'name': name});
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<double?> getSystemVolume() async {
+    try {
+      return await _channel.invokeMethod<double>('getVolume');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> setSystemVolume(double value) => _call<bool>('setVolume', false, {'value': value});
 }
 
 NativeBridge? _bridge;

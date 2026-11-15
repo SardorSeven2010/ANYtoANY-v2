@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../platform.dart';
+import '../services/gallery.dart';
 import '../services/media_tools.dart';
 import '../player/play_queue.dart';
 import 'player_screen.dart';
@@ -114,7 +115,19 @@ class _MediaLibraryTabState extends State<MediaLibraryTab> {
   @override
   void initState() {
     super.initState();
+    libraryRevision.addListener(_onLibraryChanged);
     _init();
+  }
+
+  @override
+  void dispose() {
+    libraryRevision.removeListener(_onLibraryChanged);
+    super.dispose();
+  }
+
+  /// Yangi video yuklanganda yoki aylantirilganda ro'yxat o'zi yangilanadi
+  void _onLibraryChanged() {
+    if (mounted && _granted && !_loading) _reload();
   }
 
   /// Kompyuterda papkalar darhol o'qiladi. Telefonda ruxsat avval berilgan bo'lsa

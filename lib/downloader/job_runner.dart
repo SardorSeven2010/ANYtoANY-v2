@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import '../platform.dart';
+import '../services/gallery.dart';
 import '../services/media_tools.dart';
 import 'common.dart';
 import 'hls.dart';
@@ -53,7 +54,7 @@ class DownloadRequest {
 }
 
 /// Yuklash bosqichi
-enum JobStage { probing, downloading, merging, converting }
+enum JobStage { probing, downloading, merging, converting, saving }
 
 class JobCallbacks {
   final void Function(int received, int? total, int activeSegments)? onProgress;
@@ -107,7 +108,13 @@ class JobResult {
   final String path;
   final int bytes;
   final int segmentsUsed;
-  const JobResult(this.path, this.bytes, this.segmentsUsed);
+
+  /// Galereyada ko'rinadimi
+  final bool inGallery;
+
+  /// Galereyaga qo'shishdagi izoh (xato bo'lsa)
+  final String? note;
+  const JobResult(this.path, this.bytes, this.segmentsUsed, {this.inGallery = false, this.note});
 }
 
 /// Bitta yuklashni boshidan oxirigacha bajaradi: tekshirish -> yuklash -> birlashtirish/kodlash -> .mp4
@@ -140,7 +147,11 @@ Future<JobResult> runDownloadJob(
     rethrow;
   }
   await deleteDirQuietly(work);
-  return JobResult(outPath, File(outPath).lengthSync(), segmentsUsed);
+  final bytes = File(outPath).lengthSync();
+  // tayyor video galereyada ko'rinishi uchun (Android: Movies/CORE, iPhone: Rasmlar)
+  cb.onStage?.call(JobStage.saving);
+  final published = await galleryPublisher(outPath, GalleryKind.video, name: lastSegment(outPath));
+  return JobResult(published.path, bytes, segmentsUsed, inGallery: published.inGallery, note: published.note);
 }
 
 Future<int> _runDirect(DownloadRequest r, Directory work, String outPath, JobCallbacks cb) async {

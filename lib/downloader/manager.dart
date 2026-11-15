@@ -32,6 +32,8 @@ class DownloadJob extends ChangeNotifier {
   String? error;
   String? outputPath;
   int? outputBytes;
+  bool inGallery = false;
+  String? note;
   DateTime? finishedAt;
   CancelToken? cancelToken;
 
@@ -262,6 +264,8 @@ class DownloadManager extends ChangeNotifier {
       job.status = JobStatus.done;
       job.outputPath = result.path;
       job.outputBytes = result.bytes;
+      job.inGallery = result.inGallery;
+      job.note = result.note;
       job.received = result.bytes;
       job.total = result.bytes;
       job.speed = 0;

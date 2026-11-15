@@ -96,13 +96,19 @@ object CoreNotifications {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
         if (media) {
+            // MediaSession: qulflangan ekran, quloqchin tugmalari va to'liq pleyer bildirishnomasi
+            CoreMedia.update(ctx, title, text, playing)
+            b.setCategory(Notification.CATEGORY_TRANSPORT)
+            b.setVisibility(Notification.VISIBILITY_PUBLIC)
             b.addAction(action(ctx, android.R.drawable.ic_media_previous, "Oldingi", broadcast(ctx, ACTION_MEDIA_PREFIX + "previous", 11)))
             b.addAction(
                 if (playing) action(ctx, android.R.drawable.ic_media_pause, "Pauza", broadcast(ctx, ACTION_MEDIA_PREFIX + "playpause", 12))
                 else action(ctx, android.R.drawable.ic_media_play, "Ijro", broadcast(ctx, ACTION_MEDIA_PREFIX + "playpause", 12))
             )
             b.addAction(action(ctx, android.R.drawable.ic_media_next, "Keyingi", broadcast(ctx, ACTION_MEDIA_PREFIX + "next", 13)))
-            b.setStyle(Notification.MediaStyle().setShowActionsInCompactView(0, 1, 2))
+            val style = Notification.MediaStyle().setShowActionsInCompactView(0, 1, 2)
+            CoreMedia.token?.let { style.setMediaSession(it) }
+            b.setStyle(style)
         } else {
             if (progress in 0..100) b.setProgress(100, progress, false) else b.setProgress(0, 0, true)
             b.addAction(action(ctx, android.R.drawable.ic_menu_close_clear_cancel, "To'xtatish", broadcast(ctx, ACTION_STOP_DOWNLOADS, 14)))

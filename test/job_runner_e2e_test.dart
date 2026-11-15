@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:any_to_any/downloader/common.dart';
 import 'package:any_to_any/downloader/job_runner.dart';
+import 'package:any_to_any/services/gallery.dart';
 import 'package:any_to_any/services/media_tools.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -149,6 +150,22 @@ void main() {
     expect(stages, containsAllInOrder([JobStage.probing, JobStage.downloading]));
     expect(bytes.last, File(r.path).lengthSync());
     expect(leftoverWork(), 0);
+  });
+
+  test('the finished video is published to the gallery and the result points to the gallery copy', () async {
+    final saved = <String>[];
+    final stages = <JobStage>[];
+    galleryPublisher = (path, kind, {name}) async {
+      saved.add('${kind.name}:${File(path).existsSync()}:${name ?? ''}');
+      return const GalleryResult('/storage/emulated/0/Movies/CORE/Galereya.mp4', inGallery: true);
+    };
+    addTearDown(() => galleryPublisher = publishToGallery);
+    final r = await runDownloadJob(DownloadRequest(url: server.url('/big.mp4'), title: 'Galereya'), out, <String>{}, callbacks(stages: stages));
+    expect(saved, ['video:true:Galereya.mp4'], reason: 'published once the mp4 is complete');
+    expect(r.path, '/storage/emulated/0/Movies/CORE/Galereya.mp4');
+    expect(r.inGallery, isTrue);
+    expect(r.bytes, greaterThan(100000));
+    expect(stages.last, JobStage.saving);
   });
 
   test('two downloads with the same title do not overwrite each other', () async {

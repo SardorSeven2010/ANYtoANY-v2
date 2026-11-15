@@ -41,6 +41,7 @@ class CoreService : Service() {
             }
             running = true
             kind = k
+            CoreMedia.acquireLocks(this)
         } catch (e: Exception) {
             running = false
             stopSelf()
@@ -51,6 +52,7 @@ class CoreService : Service() {
     override fun onDestroy() {
         running = false
         kind = ""
+        CoreMedia.release()
         super.onDestroy()
     }
 }

@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.drawable.Icon
+import android.media.AudioManager
 import android.os.Build
 import android.util.Rational
 import io.flutter.embedding.android.FlutterActivity
@@ -113,6 +114,32 @@ class MainActivity : FlutterActivity() {
                 result.success(enterPip())
             }
             "pinShortcut" -> result.success(pinShortcut(call.argument<String>("label") ?: "CORE"))
+            "saveToGallery" -> {
+                val path = call.argument<String>("path") ?: ""
+                val kind = call.argument<String>("kind") ?: "video"
+                val name = call.argument<String>("name")
+                // katta fayl nusxalanadi: asosiy oqimni band qilmaslik uchun alohida oqimda
+                Thread {
+                    val saved = try {
+                        GallerySaver.save(applicationContext, path, kind, name)
+                    } catch (e: Exception) {
+                        null
+                    }
+                    runOnUiThread { result.success(saved) }
+                }.start()
+            }
+            "getVolume" -> {
+                val am = getSystemService(AudioManager::class.java)
+                val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                result.success(if (max > 0) am.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / max else 0.0)
+            }
+            "setVolume" -> {
+                val am = getSystemService(AudioManager::class.java)
+                val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                val v = (call.argument<Number>("value") ?: 0).toDouble().coerceIn(0.0, 1.0)
+                am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(v * max).toInt(), 0)
+                result.success(true)
+            }
             else -> result.notImplemented()
         }
     }

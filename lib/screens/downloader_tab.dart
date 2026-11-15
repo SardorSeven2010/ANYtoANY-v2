@@ -251,6 +251,7 @@ class _JobCard extends StatelessWidget {
         "probing" => "Tekshirilmoqda...",
         "merging" => "Birlashtirilmoqda...",
         "converting" => "Kodlanmoqda...",
+        "saving" => "Galereyaga saqlanmoqda...",
         _ => "",
       };
 
@@ -282,8 +283,9 @@ class _JobCard extends StatelessWidget {
           detail = [
             "Tayyor",
             if (job.outputBytes != null) formatBytes(job.outputBytes),
-            if (job.outputPath != null) savedWhere(job.outputPath!),
-          ].join(" • ");
+            job.inGallery ? "Galereyada" : (job.outputPath != null ? savedWhere(job.outputPath!) : ""),
+          ].where((e) => e.isNotEmpty).join(" • ");
+          if (job.note != null) detail = "$detail\n${job.note}";
         } else if (job.status == JobStatus.failed) {
           detail = job.error ?? "Xato";
         } else {
