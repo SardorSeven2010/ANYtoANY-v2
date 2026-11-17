@@ -1,0 +1,5 @@
+tags:
+  ffmpeg:
+    # tizimda haqiqiy ffmpeg dasturi kerak bo'lgan testlar
+  mpv:
+    # tizimda haqiqiy libmpv kutubxonasi va ffmpeg kerak bo'lgan testlar

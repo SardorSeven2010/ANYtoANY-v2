@@ -1,21 +1,47 @@
 name: any_to_any
-description: ANYtoANY - Universal Offline Media & PDF Converter
+description: CORE - video, audio, PDF konverter, pleyer va video yuklagich
 publish_to: 'none'
-version: 1.0.0+1
+version: 2.0.0+2
 
 environment:
-  sdk: '>=3.2.0 <4.0.0'
+  sdk: '>=3.12.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  supabase_flutter: ^2.5.0
-  shared_preferences: ^2.2.3
-  android_id: ^0.4.0
-  file_picker: ^8.0.0
-  ffmpeg_kit_flutter_new: ^1.1.0
-  path_provider: ^2.1.3
-  pdfx: ^2.6.0
+  anytoany_core:
+    path: packages/anytoany_core
+  supabase_flutter: ^2.18.3
+  shared_preferences: ^2.5.6
+  android_id: ^0.6.0
+  file_picker: ^13.3.3
+  ffmpeg_kit_flutter_new: ^4.6.8
+  path_provider: ^2.1.6
+  pdfx: ^2.11.0
+  pdf: ^3.13.1
+  url_launcher: ^6.3.3
+  photo_manager: ^3.12.0
+  pdf_combiner: ^6.3.0
+  device_info_plus: ^13.3.0
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_video: ^1.0.7
+  webview_flutter: ^4.14.1
+  screen_brightness: ^2.1.11
+  audio_session: ^0.2.4
+  webview_flutter_android: ^4.14.1
+  webview_flutter_wkwebview: ^3.27.2
+  image: ^4.13.1
+  archive: ^4.7.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  xml: ^7.1.0
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/auth.jpg
+    - assets/logo.png
+    - assets/backgrounds/

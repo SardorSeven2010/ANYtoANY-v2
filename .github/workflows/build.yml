@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android, Windows, Linux, iOS va Admin
 
 on:
   push:
@@ -22,33 +22,314 @@ jobs:
       - name: Flutter o'rnatish
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.47.9'
           channel: 'stable'
 
-      - name: Android papkani yaratish va asl ANYtoANY kodlarini tiklash
+      - name: Android papkani yaratish va CORE sozlamalarini qo'llash
         run: |
           cp pubspec.yaml /tmp/user_pubspec.yaml
-          if [ -f "lib/main.dart" ]; then
-            cp lib/main.dart /tmp/user_main.dart
-          elif [ -f "main.dart" ]; then
-            cp main.dart /tmp/user_main.dart
-          fi
+          cp lib/main.dart /tmp/user_main.dart
           flutter create --platforms=android --org com.anytoany.converter --project-name any_to_any .
           cp /tmp/user_pubspec.yaml pubspec.yaml
           mkdir -p lib
           cp /tmp/user_main.dart lib/main.dart
-          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/g' android/app/build.gradle || true
-          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/g' android/app/build.gradle || true
-          sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET"/>\n<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>' android/app/src/main/AndroidManifest.xml
+          # flutter create yaratgan namuna test kerak emas
+          rm -f test/widget_test.dart
+          # nom, ruxsatlar, fon xizmati, PiP, Kotlin native qatlam, minSdk 24, belgilar
+          python3 installer/android/patch_project.py
 
       - name: Kutubxonalarni o'rnatish
         run: flutter pub get
 
-      - name: Release APK yig'ish
-        run: flutter build apk --release
+      - name: Sahifa detektori testi uchun jsdom o'rnatish
+        run: npm install --prefix "$RUNNER_TEMP/jsdomlib" jsdom@24 --no-audit --no-fund
 
-      - name: Tayyor APK faylni yuklashga chiqarish
+      - name: Testlar
+        env:
+          NODE_PATH: ${{ runner.temp }}/jsdomlib/node_modules
+        run: flutter test --exclude-tags "ffmpeg || mpv"
+
+      - name: Release APK yig'ish (protsessor turi bo'yicha alohida, kichikroq hajm)
+        run: flutter build apk --release --split-per-abi
+
+      - name: APK fayllarini nomlash
+        run: |
+          mkdir -p build/apk-dist
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/apk-dist/CORE-arm64-v8a.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk build/apk-dist/CORE-armeabi-v7a.apk
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk build/apk-dist/CORE-x86_64.apk
+          ls -la build/apk-dist
+
+      - name: Tayyor APK fayllarni yuklashga chiqarish
         uses: actions/upload-artifact@v4
         with:
-          name: ANYtoANY-Full-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: CORE-Android-APK
+          path: build/apk-dist/*.apk
+
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Kodlarni yuklab olish
+        uses: actions/checkout@v4
+
+      - name: Flutter o'rnatish
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: 'stable'
+
+      - name: Windows papkani yaratish va ilova nomini sozlash
+        shell: bash
+        run: |
+          cp pubspec.yaml "$RUNNER_TEMP/user_pubspec.yaml"
+          cp lib/main.dart "$RUNNER_TEMP/user_main.dart"
+          flutter create --platforms=windows --org com.anytoany.converter --project-name any_to_any .
+          cp "$RUNNER_TEMP/user_pubspec.yaml" pubspec.yaml
+          cp "$RUNNER_TEMP/user_main.dart" lib/main.dart
+          # .exe nomi, oyna sarlavhasi, o'lchami va fayl ma'lumotlari
+          sed -i 's/set(BINARY_NAME "any_to_any")/set(BINARY_NAME "CORE")/' windows/CMakeLists.txt
+          sed -i 's/window.Create(L"any_to_any"/window.Create(L"CORE"/; s/Size size(1280, 720)/Size size(1100, 820)/; s/Point origin(10, 10)/Point origin(80, 40)/' windows/runner/main.cpp
+          sed -i 's/"any_to_any.exe"/"CORE.exe"/; s/"any_to_any"/"CORE"/g; s/"com.anytoany.converter"/"CORE"/; s/com.anytoany.converter\. All/CORE. All/' windows/runner/Runner.rc
+          cp installer/core.ico windows/runner/resources/app_icon.ico
+          grep -n "BINARY_NAME \"" windows/CMakeLists.txt
+          grep -n "window.Create" windows/runner/main.cpp
+
+      - name: Kutubxonalarni o'rnatish
+        run: flutter pub get
+
+      - name: Windows EXE yig'ish
+        run: flutter build windows --release
+
+      - name: Visual C++ kutubxonalarini ilova yoniga qo'shish
+        shell: pwsh
+        run: |
+          # Kompyuterda "VCRUNTIME140.dll topilmadi" xatosi chiqmasligi uchun
+          $release = "build\windows\x64\runner\Release"
+          foreach ($dll in @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")) {
+            $src = Join-Path $env:WINDIR "System32\$dll"
+            if (Test-Path $src) { Copy-Item $src $release -Force }
+          }
+          Get-ChildItem $release | Select-Object Name, Length | Format-Table -AutoSize
+
+      - name: Ilovani ishga tushirib ko'rish
+        shell: pwsh
+        run: |
+          # Hamma DLL'lar topilishi va ilova ochilib turishini tekshiradi
+          $exe = "build\windows\x64\runner\Release\CORE.exe"
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 25
+          if ($p.HasExited) {
+            Write-Error "Ilova 25 soniya ichida yopildi (chiqish kodi $($p.ExitCode))"
+            exit 1
+          }
+          Stop-Process -Id $p.Id -Force
+          "Ilova ishga tushdi va 25 soniya ishlab turdi"
+
+      - name: O'rnatuvchi (Setup.exe) yaratish
+        shell: pwsh
+        run: |
+          choco upgrade innosetup -y --no-progress | Out-Null
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = (Get-Command iscc.exe -ErrorAction Stop).Source }
+          $version = ((Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value)
+          & $iscc "/DAppVersion=$version" installer\core.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: O'rnatuvchini yuklashga chiqarish
+        uses: actions/upload-artifact@v4
+        with:
+          name: CORE-Windows-Setup
+          path: build/installer/CORE-Setup.exe
+
+      - name: O'rnatmasdan ishlaydigan versiyani yuklashga chiqarish
+        uses: actions/upload-artifact@v4
+        with:
+          name: CORE-Windows-Portable
+          path: build/windows/x64/runner/Release/
+
+  linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Kodlarni yuklab olish
+        uses: actions/checkout@v4
+
+      - name: Linux uchun kerakli dasturlar
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libjson-glib-dev patchelf xvfb ffmpeg libmpv-dev mpv libasound2-dev
+
+      - name: Flutter o'rnatish
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: 'stable'
+
+      - name: Linux papkani yaratish va ilova nomini sozlash
+        run: |
+          cp pubspec.yaml "$RUNNER_TEMP/user_pubspec.yaml"
+          cp lib/main.dart "$RUNNER_TEMP/user_main.dart"
+          flutter create --platforms=linux --org com.anytoany.converter --project-name any_to_any .
+          cp "$RUNNER_TEMP/user_pubspec.yaml" pubspec.yaml
+          cp "$RUNNER_TEMP/user_main.dart" lib/main.dart
+          rm -f test/widget_test.dart
+          sed -i 's/set(BINARY_NAME "any_to_any")/set(BINARY_NAME "core")/' linux/CMakeLists.txt
+          sed -i 's/"any_to_any"/"CORE"/g; s/gtk_window_set_default_size(window, 1280, 720)/gtk_window_set_default_size(window, 1100, 820)/' linux/runner/my_application.cc
+          grep -n 'BINARY_NAME "' linux/CMakeLists.txt
+          grep -n "CORE\|set_default_size" linux/runner/my_application.cc
+
+      - name: Kutubxonalarni o'rnatish
+        run: flutter pub get
+
+      - name: Konvertatsiya va pleyer dvigateli testlari (haqiqiy ffmpeg va libmpv bilan)
+        run: flutter test --tags "ffmpeg || mpv"
+
+      - name: Linux ilovani yig'ish
+        run: flutter build linux --release
+
+      - name: Kutubxonalarni tekshirish va tuzatish
+        run: |
+          PLUGIN_DIR=$(python3 -c "import json; d=json.load(open('.flutter-plugins-dependencies')); print([p['path'] for p in d['plugins']['linux'] if p['name']=='pdf_combiner'][0])")
+          bash installer/linux/check_bundle.sh build/linux/x64/release/bundle "$PLUGIN_DIR/linux/libpdfium.so"
+
+      - name: Ilovani ishga tushirib ko'rish
+        run: |
+          set +e
+          xvfb-run -a timeout 25s build/linux/x64/release/bundle/core > "$RUNNER_TEMP/run.log" 2>&1
+          code=$?
+          tail -30 "$RUNNER_TEMP/run.log"
+          if [ "$code" -ne 124 ]; then
+            echo "Ilova 25 soniya ichida yopildi (chiqish kodi $code)"
+            exit 1
+          fi
+          # FFmpeg va boshqa kutubxonalar keyinroq (dlopen bilan) yuklanadi: ular ham yuklanishi shart
+          # (FFmpegKit ataylab olib tashlangan, uning ogohlantirishi hisobga olinmaydi)
+          if grep -Ei "dlopen|cannot open shared object" "$RUNNER_TEMP/run.log" | grep -v "ffmpeg_kit:"; then
+            echo "Kutubxona yuklanmadi - yuqoridagi xatoni qarang"
+            exit 1
+          fi
+          echo "Ilova ishga tushdi, kutubxonalar yuklandi va 25 soniya ishlab turdi"
+
+      - name: .deb va .tar.gz paketlarini yaratish
+        run: |
+          VERSION=$(sed -nE 's/^version:[[:space:]]*([0-9.]+).*/\1/p' pubspec.yaml)
+          bash installer/linux/build_deb.sh build/linux/x64/release/bundle "$VERSION" build/linux-dist
+          cp installer/linux/README.txt build/linux/x64/release/bundle/README.txt
+          tar -C build/linux/x64/release -czf build/linux-dist/CORE-linux-x64.tar.gz --transform 's,^bundle,CORE,' bundle
+          ls -la build/linux-dist
+
+      - name: .deb paketni yuklashga chiqarish
+        uses: actions/upload-artifact@v4
+        with:
+          name: CORE-Linux-deb
+          path: build/linux-dist/*.deb
+
+      - name: .tar.gz arxivni yuklashga chiqarish
+        uses: actions/upload-artifact@v4
+        with:
+          name: CORE-Linux-tar
+          path: build/linux-dist/CORE-linux-x64.tar.gz
+
+  ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Kodlarni yuklab olish
+        uses: actions/checkout@v4
+
+      - name: Flutter o'rnatish
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: 'stable'
+
+      - name: iOS papkani yaratish va sozlash
+        run: |
+          cp pubspec.yaml "$RUNNER_TEMP/user_pubspec.yaml"
+          cp lib/main.dart "$RUNNER_TEMP/user_main.dart"
+          flutter create --platforms=ios --org com.anytoany.converter --project-name any_to_any .
+          cp "$RUNNER_TEMP/user_pubspec.yaml" pubspec.yaml
+          cp "$RUNNER_TEMP/user_main.dart" lib/main.dart
+          PL=ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName CORE" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string Videolaringizni ilovada ochish va aylantirish uchun kerak." "$PL"
+          /usr/libexec/PlistBuddy -c "Add :NSAppleMusicUsageDescription string Audio fayllarni tanlash uchun kerak." "$PL"
+          /usr/libexec/PlistBuddy -c "Add :UIFileSharingEnabled bool true" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :LSSupportsOpeningDocumentsInPlace bool true" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes array" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes:0 string tel" "$PL"
+          # Fonda musiqa/video ovozi, skrinshotni galereyaga saqlash, brauzerdagi HTTP sahifalar
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string audio" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryAddUsageDescription string Skrinshotlarni galereyaga saqlash uchun kerak." "$PL"
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$PL"
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoadsInWebView bool true" "$PL"
+          plutil -lint "$PL"
+          # Ilova belgisi (tools/gen_logo.py bilan yaratilgan)
+          cp installer/icons/ios/*.png ios/Runner/Assets.xcassets/AppIcon.appiconset/
+          grep -m1 "IPHONEOS_DEPLOYMENT_TARGET" ios/Runner.xcodeproj/project.pbxproj
+
+      - name: Kutubxonalarni o'rnatish
+        run: flutter pub get
+
+      - name: iOS ilovani yig'ish (imzosiz)
+        run: flutter build ios --release --no-codesign
+
+      - name: .ipa fayl yaratish
+        run: |
+          mkdir -p build/ios-dist/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios-dist/Payload/
+          cd build/ios-dist
+          zip -qry CORE-unsigned.ipa Payload
+          ls -la
+
+      - name: .ipa faylni yuklashga chiqarish
+        uses: actions/upload-artifact@v4
+        with:
+          name: CORE-iOS-unsigned-ipa
+          path: build/ios-dist/CORE-unsigned.ipa
+
+  admin:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin_app
+
+    steps:
+      - name: Kodlarni yuklab olish
+        uses: actions/checkout@v4
+
+      - name: Java 17 o'rnatish
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Flutter o'rnatish
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: 'stable'
+
+      - name: Admin ilova uchun Android papkani yaratish
+        run: |
+          cp pubspec.yaml "$RUNNER_TEMP/admin_pubspec.yaml"
+          cp lib/main.dart "$RUNNER_TEMP/admin_main.dart"
+          flutter create --platforms=android --org com.anytoany --project-name anytoany_admin .
+          cp "$RUNNER_TEMP/admin_pubspec.yaml" pubspec.yaml
+          cp "$RUNNER_TEMP/admin_main.dart" lib/main.dart
+          rm -f test/widget_test.dart
+          python3 ../installer/android/patch_project.py admin
+
+      - name: Admin ilova testlari
+        run: flutter test
+
+      - name: Admin APK yig'ish
+        run: flutter build apk --release
+
+      - name: Admin APK ni yuklashga chiqarish
+        uses: actions/upload-artifact@v4
+        with:
+          name: CORE-Admin-APK
+          path: admin_app/build/app/outputs/flutter-apk/app-release.apk

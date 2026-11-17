@@ -1,0 +1,23 @@
+name: anytoany_admin
+description: CORE Admin - foydalanuvchilar va PRO obunalarni boshqarish ilovasi
+publish_to: 'none'
+version: 2.0.0+2
+
+environment:
+  sdk: '>=3.12.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  anytoany_core:
+    path: ../packages/anytoany_core
+  supabase_flutter: ^2.18.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/logo.png

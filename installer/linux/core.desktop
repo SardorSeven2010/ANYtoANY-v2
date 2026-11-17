@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=CORE
+Comment=Video, audio va PDF konverter
+Exec=/opt/core/core
+Icon=core
+Terminal=false
+Categories=AudioVideo;Office;Utility;
+Keywords=video;audio;pdf;converter;konverter;
