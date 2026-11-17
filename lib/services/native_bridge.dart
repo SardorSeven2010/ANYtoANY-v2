@@ -63,6 +63,10 @@ abstract class NativeBridge {
   /// Mini-brauzerdagi WebView ekran o'chganda ham "ko'rinadi" holatda ushlab turiladi (video ovozi to'xtamasligi uchun).
   /// [id] - WebView'ning native identifikatori. Qaytaradi: native qatlam WebView'ni topdimi.
   Future<bool> webViewKeepAlive(int id, bool on);
+
+  /// Rasm fayldagi matnni qurilmaning o'zida taniydi (Android: ML Kit). Har bir so'z: text, left, top, right, bottom.
+  /// Qo'llab-quvvatlanmasa yoki xato bo'lsa, null.
+  Future<List<Map<String, Object?>>?> ocrImage(String path);
 }
 
 class NoopNativeBridge implements NativeBridge {
@@ -105,6 +109,8 @@ class NoopNativeBridge implements NativeBridge {
   Future<void> setSystemVolume(double value) async {}
   @override
   Future<bool> webViewKeepAlive(int id, bool on) async => false;
+  @override
+  Future<List<Map<String, Object?>>?> ocrImage(String path) async => null;
 }
 
 class MethodChannelNativeBridge implements NativeBridge {
@@ -184,6 +190,16 @@ class MethodChannelNativeBridge implements NativeBridge {
   Future<void> setSystemVolume(double value) => _call<bool>('setVolume', false, {'value': value});
   @override
   Future<bool> webViewKeepAlive(int id, bool on) => _call('webviewKeepAlive', false, {'id': id, 'on': on});
+  @override
+  Future<List<Map<String, Object?>>?> ocrImage(String path) async {
+    try {
+      final raw = await _channel.invokeListMethod<Map<Object?, Object?>>('ocrImage', {'path': path});
+      if (raw == null) return null;
+      return [for (final m in raw) m.map((k, v) => MapEntry(k.toString(), v))];
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 NativeBridge? _bridge;

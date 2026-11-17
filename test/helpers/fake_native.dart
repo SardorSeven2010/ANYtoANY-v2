@@ -114,4 +114,12 @@ class FakeNativeBridge implements NativeBridge {
     webViewKeepAlives.add((id, on));
     return true;
   }
+
+  List<Map<String, Object?>>? ocrResult;
+
+  @override
+  Future<List<Map<String, Object?>>?> ocrImage(String path) async {
+    calls.add('ocr:$path');
+    return ocrResult;
+  }
 }

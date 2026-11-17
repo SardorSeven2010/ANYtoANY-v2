@@ -110,7 +110,7 @@ if not admin:
     res = ROOT / "android/app/src/main/res"
     shutil.copytree(HERE / "res", res, dirs_exist_ok=True)
 
-# ---- minSdk 24 (ffmpeg va media_kit talabi)
+# ---- minSdk 24 (ffmpeg va media_kit talabi) va ML Kit (skanerlangan PDF dan matn o'qish, faqat asosiy ilova)
 for name in ("build.gradle", "build.gradle.kts"):
     f = ROOT / "android/app" / name
     if f.exists():
@@ -118,6 +118,14 @@ for name in ("build.gradle", "build.gradle.kts"):
         t = t.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 24").replace(
             "minSdk = flutter.minSdkVersion", "minSdk = 24"
         )
+        if not admin and "com.google.mlkit" not in t:
+            # Groovy va Kotlin DSL da bir xil yoziladi: yangi `dependencies` bloki fayl oxiriga qo'shiladi
+            dep = (
+                "\nimplementation('com.google.mlkit:text-recognition:16.0.1')\n"
+                if name == "build.gradle"
+                else '\nimplementation("com.google.mlkit:text-recognition:16.0.1")\n'
+            )
+            t = t.rstrip() + "\n\ndependencies {" + dep + "}\n"
         f.write_text(t, encoding="utf-8")
 
 # ---- ilova belgisi

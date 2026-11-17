@@ -135,6 +135,16 @@ class MainActivity : FlutterActivity() {
                 val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
                 result.success(if (max > 0) am.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / max else 0.0)
             }
+            "ocrImage" -> {
+                val path = call.argument<String>("path")
+                if (path == null) {
+                    result.error("ocr", "Rasm yo'li berilmadi", null)
+                } else {
+                    OcrRecognizer.recognize(path) { words, error ->
+                        if (words != null) result.success(words) else result.error("ocr", error, null)
+                    }
+                }
+            }
             "webviewKeepAlive" -> {
                 if (call.argument<Boolean>("on") != true) {
                     WebViewKeeper.stop()

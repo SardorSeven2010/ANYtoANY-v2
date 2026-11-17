@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import '../ocr/scan_service.dart';
 import '../services/media_tools.dart';
 import '../services/online_pdf.dart';
 import '../services/profile_service.dart';
@@ -35,7 +36,24 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
   String _stage = "";
   final List<String> _results = [];
 
+  /// Skanerlangan PDF ni qurilmaning o'zida o'qish mumkinmi (Android'da ML Kit)
+  bool _scanAvailable = false;
+
+  /// Matnli PDF ni ham skan sifatida o'qishga majburlash (jadvali buzilganda)
+  bool _forceScan = false;
+
+  @override
+  void initState() {
+    super.initState();
+    scanModeAvailable().then((ok) {
+      if (mounted && ok) setState(() => _scanAvailable = true);
+    });
+  }
+
   bool get _toPdf => widget.mode == OnlineMode.toPdf;
+
+  /// Skan rejimi faqat Word va Excel uchun (PowerPoint hozircha onlayn xizmat orqali)
+  bool get _scanFormat => !_toPdf && (_format == "docx" || _format == "xlsx");
 
   String get _title => _toPdf ? "Hujjatdan PDF" : "PDF dan Word / PowerPoint";
 
@@ -89,16 +107,25 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
         final outPath = uniquePath(outDir, "${baseNameOf(file.name)}_CORE", outFormat, usedPaths);
         final String prefix = files.length > 1 ? "${i + 1}/${files.length}: " : "";
         try {
-          await convertOnline(
-            sourcePath: file.path!,
-            outPath: outPath,
-            operation: _toPdf ? OnlineOperation.create : OnlineOperation.export,
-            targetFormat: _toPdf ? null : _format,
-            sourceFormat: _toPdf ? extensionOf(file.name) : null,
-            onStage: (stage) {
-              if (mounted) setState(() => _stage = "$prefix$stage");
-            },
-          );
+          void stage(String s) {
+            if (mounted) setState(() => _stage = "$prefix$s");
+          }
+
+          // Skanerlangan (rasm) PDF: matn qurilmaning o'zida tanib olinadi va jadval chiziqlari bo'yicha qayta quriladi.
+          // Onlayn xizmat bunday fayllarda ustunlarni aralashtirib, jadvalni buzardi.
+          final scan = _scanAvailable && _scanFormat && (_forceScan || await isScannedPdf(file.path!));
+          if (scan) {
+            await convertScanLocally(sourcePath: file.path!, outPath: outPath, format: _format, onStage: stage);
+          } else {
+            await convertOnline(
+              sourcePath: file.path!,
+              outPath: outPath,
+              operation: _toPdf ? OnlineOperation.create : OnlineOperation.export,
+              targetFormat: _toPdf ? null : _format,
+              sourceFormat: _toPdf ? extensionOf(file.name) : null,
+              onStage: stage,
+            );
+          }
         } catch (_) {
           await deleteQuietly(outPath);
           rethrow;
@@ -235,6 +262,18 @@ class _OnlinePdfScreenState extends State<OnlinePdfScreen> {
                   selected: {_format},
                   onSelectionChanged: _busy ? null : (s) => setState(() => _format = s.first),
                 ),
+                if (_scanAvailable && _scanFormat)
+                  SwitchListTile(
+                    key: const Key("scanSwitch"),
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text("Skan (rasm) sifatida o'qish"),
+                    subtitle: const Text(
+                      "Skanerlangan PDF lar avtomatik shunday o'qiladi: matn telefonning o'zida tanib olinadi, "
+                      "jadval chiziqlari bo'yicha tiklanadi. Matnli PDF da jadval buzilsa, shuni yoqing.",
+                    ),
+                    value: _forceScan,
+                    onChanged: _busy ? null : (v) => setState(() => _forceScan = v),
+                  ),
               ],
               const SizedBox(height: 16),
               FilledButton.icon(

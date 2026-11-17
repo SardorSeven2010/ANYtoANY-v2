@@ -6,6 +6,7 @@ Android, iPhone, Windows va Linux uchun.
 ## Imkoniyatlar
 
 - **Konvertor**: video / audio / rasm / PDF; PDF dan Word, PowerPoint, Excel; hujjatdan PDF; PDF birlashtirish.
+  Skanerlangan (rasm) PDF (masalan, CamScanner'dan) Word / Excel ga **qurilmaning o'zida** aylantiriladi (Android, internetsiz): matn ML Kit bilan tanib olinadi, jadval chiziqlari bo'yicha qayta quriladi (birlashgan kataklar, burilgan sarlavhalar, ustun enlari saqlanadi; Excel'da keyingi sahifalar bitta varaqqa davom etadi). Matnli PDF lar avvalgidek onlayn xizmat orqali o'tadi; ularning jadvali buzilsa, "Skan sifatida o'qish" tugmasi bilan shu usulga o'tkazish mumkin. iPhone va Windows'da skan rejimi hozircha yo'q (onlayn xizmat ishlatiladi). Kod: `lib/ocr/`.
 - **Pleyer** (libmpv): avtomatik keyingi video yoki musiqa, takrorlash (ro'yxat / bitta), aralashtirish,
   oxirigacha ijro etib to'xtash; chap / o'rta / o'ng tomonni 2 marta bosish (10 s orqaga / pauza / 10 s oldinga);
   tezlik 0.25x-4x; apparat va dasturiy dekoder; 16:9, 19.5:9, 21:9, 4:3 va boshqa video o'lchamlari;
